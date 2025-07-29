@@ -1,0 +1,13 @@
+openeo
+gdal
+rasterio
+scikit-image
+langchain-anthropic
+google-generativeai
+openai
+psycopg2-binary  
+Pillow           
+transformers     
+torch            
+sentence-transformers 
+chromadb
