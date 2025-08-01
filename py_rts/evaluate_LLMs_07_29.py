@@ -101,7 +101,7 @@ class CaptionEvaluator:
             weights = {
                 "Environmental_Impact": 0.48,
                 "Accuracy_Plausibility": 0.01,
-                "Specificity_Terminology": 0.50,
+                "Specificity_Terminology": 0.48,
                 "Processes_Patterns": 0.01,
                 "Adherence_to_Constraints": 0.01,
                 "Conciseness": 0.01
