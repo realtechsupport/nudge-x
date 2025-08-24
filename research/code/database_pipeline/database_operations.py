@@ -34,8 +34,8 @@ def create_table_if_not_exists():
                     id SERIAL PRIMARY KEY,
                     filename VARCHAR(255) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    is_accepted BOOLEAN,
-                    captions TEXT[]
+                    is_accepted BOOLEAN DEFAULT FALSE,
+                    caption TEXT
                 );
             """)
             conn.commit()
@@ -47,10 +47,14 @@ def create_table_if_not_exists():
                 cursor.close()
                 conn.close()
 
-def save_image_and_captions(image_path, captions, is_accepted):
+def save_image_and_captions(image_path, caption):
     """
-    Saves the image metadata and its captions to the PostgreSQL database.
+    Saves the image metadata and its caption to the PostgreSQL database.
     Returns the ID of the newly saved row.
+    
+    Args:
+        image_path (str): Path to the image file
+        caption (str): Caption for the image
     """
     conn = connect_db()
     if conn is None:
@@ -61,10 +65,10 @@ def save_image_and_captions(image_path, captions, is_accepted):
         filename = os.path.basename(image_path)
 
         insert_sql = """
-            INSERT INTO captions (filename, is_accepted, captions)
-            VALUES (%s, %s, %s) RETURNING id;
+            INSERT INTO captions (filename, is_accepted, caption)
+            VALUES (%s, FALSE, %s) RETURNING id;
         """
-        cursor.execute(insert_sql, (filename, is_accepted, captions))
+        cursor.execute(insert_sql, (filename, caption))
         image_id = cursor.fetchone()[0]
         conn.commit()
         print(f"Caption(s) for '{filename}' saved to DB with ID: {image_id}")
