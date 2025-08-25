@@ -35,6 +35,7 @@ def create_table_if_not_exists():
                     filename VARCHAR(255) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_accepted BOOLEAN DEFAULT FALSE,
+                    is_evaluated BOOLEAN DEFAULT FALSE,
                     caption TEXT
                 );
             """)
@@ -65,8 +66,8 @@ def save_image_and_captions(image_path, caption):
         filename = os.path.basename(image_path)
 
         insert_sql = """
-            INSERT INTO captions (filename, is_accepted, caption)
-            VALUES (%s, FALSE, %s) RETURNING id;
+            INSERT INTO captions (filename, caption)
+            VALUES (%s, %s) RETURNING id;
         """
         cursor.execute(insert_sql, (filename, caption))
         image_id = cursor.fetchone()[0]
