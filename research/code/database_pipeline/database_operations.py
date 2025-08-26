@@ -4,6 +4,7 @@ from psycopg2 import Error
 import os
 from PIL import Image
 import io
+from typing import List, Tuple
 
 from config.database_config import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT
 
@@ -37,7 +38,7 @@ def create_table_if_not_exists():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_accepted BOOLEAN DEFAULT FALSE,
                     is_evaluated BOOLEAN DEFAULT FALSE,
-                    caption TEXT,
+                    caption TEXT
                 );
             """)
             # Table for embedding tracking
@@ -61,14 +62,15 @@ def create_table_if_not_exists():
                 cursor.close()
                 conn.close()
 
-def save_image_and_captions(image_path, caption):
+
+def save_filename_and_captions(captions_with_metadata: List[Tuple[str, str, str, bool, bool]]):
     """
-    Saves the image metadata and its caption to the PostgreSQL database.
-    Returns the ID of the newly saved row.
+    Saves multiple image metadata entries and their captions to the PostgreSQL database.
+    Returns a list of IDs for the newly saved rows.
     
     Args:
-        image_path (str): Path to the image file
-        caption (str): Caption for the image
+        captions_with_metadata (list of tuples): Each tuple should be 
+        (filename, location, caption, is_accepted, is_evaluated)
     """
     conn = connect_db()
     if conn is None:
@@ -76,22 +78,25 @@ def save_image_and_captions(image_path, caption):
 
     try:
         cursor = conn.cursor()
-        filename = os.path.basename(image_path)
 
         insert_sql = """
-            INSERT INTO captions (filename,location, caption)
-            VALUES (%s, %s, %s) RETURNING id;
+            INSERT INTO captions (filename, location, caption, is_accepted, is_evaluated)
+            VALUES (%s, %s, %s, %s, %s);
         """
-        cursor.execute(insert_sql, (filename, caption))
-        image_id = cursor.fetchone()[0]
+
+        # Execute batch insert
+        cursor.executemany(insert_sql, captions_with_metadata)
+
+
         conn.commit()
-        print(f"Caption(s) for '{filename}' saved to DB with ID: {image_id}")
-        return image_id
-    except Error as e:
-        print(f"Error saving caption(s): {e}")
+        print(f"Inserted {len(captions_with_metadata)} rows into DB.")
+        
+
+    except Exception as e:
+        print(f"Error saving captions: {e}")
         conn.rollback()
-        return None
     finally:
         cursor.close()
         conn.close()
+
 
