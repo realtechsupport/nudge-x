@@ -1,8 +1,86 @@
-import uuid
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from qdrant_client import QdrantClient, models
 from sentence_transformers import SentenceTransformer
+import uuid
 import numpy as np
+
+# -------------------------------
+# QDRANT CLIENT INITIALIZATION
+# -------------------------------
+
+def create_qdrant_client(host: str = "localhost", port: int = 6333) -> QdrantClient:
+    """
+    Create a Qdrant client connected to an external service.
+    """
+    client = QdrantClient(host=host, port=port)
+    try:
+        client.get_collections()  # test connection
+        print(f"✅ Connected to external Qdrant at {host}:{port}.")
+        return client
+    except Exception as e:
+        raise ConnectionError(f"❌ Failed to connect to Qdrant at {host}:{port}: {e}")
+
+
+def create_qdrant_client_testing() -> QdrantClient:
+    """
+    Create an in-memory Qdrant client for testing purposes.
+    """
+    client = QdrantClient(":memory:")
+    print("✅ Initialized in-memory Qdrant client (testing only).")
+    return client
+
+
+# -------------------------------
+# EMBEDDING MODEL
+# -------------------------------
+
+def initialize_embedding_model(model_name: str) -> Tuple[SentenceTransformer, int]:
+    """
+    Load a sentence-transformer model and return it along with its vector size.
+    """
+    try:
+        model = SentenceTransformer(model_name)
+        vector_size = model.get_sentence_embedding_dimension()
+        print(f"✅ Sentence-transformer model '{model_name}' loaded. Vector size: {vector_size}")
+        return model, vector_size
+    except Exception as e:
+        raise RuntimeError(f"❌ Error loading model '{model_name}': {e}")
+
+
+# -------------------------------
+# COLLECTION MANAGEMENT
+# -------------------------------
+
+def get_or_create_collection(
+    client: QdrantClient,
+    collection_name: str,
+    vector_size: int,
+    distance: models.Distance = models.Distance.COSINE
+) -> None:
+    """
+    Get an existing Qdrant collection or create it if missing.
+    Preserves data if the collection already exists.
+    """
+    if client is None:
+        raise ValueError("Qdrant client cannot be None.")
+
+    try:
+        collections = client.get_collections().collections
+        if any(c.name == collection_name for c in collections):
+            print(f"✅ Collection '{collection_name}' already exists. Data preserved.")
+        else:
+            client.create_collection(
+                collection_name=collection_name,
+                vectors_config=models.VectorParams(size=vector_size, distance=distance)
+            )
+            print(f"✅ Collection '{collection_name}' created. Vector size: {vector_size}.")
+    except Exception as e:
+        raise RuntimeError(f"❌ Error creating or getting collection '{collection_name}': {e}")
+
+
+# -------------------------------
+# ADD CAPTIONS WITH METADATA
+# -------------------------------
 
 def add_captions_to_vector_db(
     client: QdrantClient,
@@ -63,3 +141,26 @@ def add_captions_to_vector_db(
     
     print(f"✅ Added {len(points_to_upsert)} captions to '{collection_name}'.")
     return added_point_ids
+
+
+# -------------------------------
+# FULL CAPTIONS-ONLY WORKFLOW
+# -------------------------------
+
+def build_vector_store_from_captions(
+    client: QdrantClient,
+    collection_name: str,
+    captions: List[Dict],
+    model_name: str
+):
+    """
+    Full workflow: initialize embedding model, ensure collection exists,
+    vectorize captions, and add to Qdrant.
+    """
+    # Initialize model
+    model, vector_size = initialize_embedding_model(model_name)
+
+    # Vectorize and upsert captions
+    add_captions_to_vector_db(client, collection_name, captions, model, vector_size)
+
+    print(f"✅ Vector store '{collection_name}' updated with {len(captions)} captions.")
