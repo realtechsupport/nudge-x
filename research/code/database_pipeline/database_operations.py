@@ -33,12 +33,25 @@ def create_table_if_not_exists():
                 CREATE TABLE IF NOT EXISTS captions (
                     id SERIAL PRIMARY KEY,
                     filename VARCHAR(255) NOT NULL,
+                    location VARCHAR(255),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_accepted BOOLEAN DEFAULT FALSE,
                     is_evaluated BOOLEAN DEFAULT FALSE,
-                    caption TEXT
+                    caption TEXT,
                 );
             """)
+            # Table for embedding tracking
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS caption_embeddings (
+                    id SERIAL PRIMARY KEY,
+                    caption_id INT REFERENCES captions(id) ON DELETE CASCADE,
+                    embedding_added BOOLEAN DEFAULT FALSE,
+                    embedding_created_at TIMESTAMP,
+                    qdrant_point_id UUID
+                );
+            """)
+
+            
             conn.commit()
             print("Tables checked/created successfully.")
         except Error as e:
@@ -66,8 +79,8 @@ def save_image_and_captions(image_path, caption):
         filename = os.path.basename(image_path)
 
         insert_sql = """
-            INSERT INTO captions (filename, caption)
-            VALUES (%s, %s) RETURNING id;
+            INSERT INTO captions (filename,location, caption)
+            VALUES (%s, %s, %s) RETURNING id;
         """
         cursor.execute(insert_sql, (filename, caption))
         image_id = cursor.fetchone()[0]
