@@ -33,7 +33,7 @@ def main():
 	load_dotenv()
 
 	# Mode: production (external Qdrant) or testing (in-memory)
-	qdrant_mode = os.getenv("QDRANT_MODE", "testing").lower()
+	qdrant_mode = os.getenv("QDRANT_MODE", "production").lower()
 
 	collection_name = "captions_collection"
 	model_name = "sentence-transformers/all-MiniLM-L6-v2"
