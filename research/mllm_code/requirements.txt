@@ -12,3 +12,6 @@ torch
 sentence-transformers 
 chromadb
 python-dotenv
+langchain
+qdrant-client
+tiktoken

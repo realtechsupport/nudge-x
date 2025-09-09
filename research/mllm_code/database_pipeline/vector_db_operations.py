@@ -114,8 +114,8 @@ def add_captions_to_vector_db(
     added_point_ids = []
 
     # Vectorize all captions
-    captions_text = [doc['caption'] for doc in captions]
-    vectors = model.encode(captions_text)
+    chunks_text = [doc['chunk'] for doc in captions]
+    vectors = model.encode(chunks_text)
     
     for i, doc in enumerate(captions):
         point_id = str(uuid.uuid4())
@@ -139,7 +139,7 @@ def add_captions_to_vector_db(
         wait=True
     )
     
-    print(f"✅ Added {len(points_to_upsert)} captions to '{collection_name}'.")
+    print(f"✅ Added {len(points_to_upsert)} chunks to '{collection_name}'.")
     return added_point_ids
 
 
@@ -164,3 +164,34 @@ def build_vector_store_from_captions(
     add_captions_to_vector_db(client, collection_name, captions, model, vector_size)
 
     print(f"✅ Vector store '{collection_name}' updated with {len(captions)} captions.")
+
+
+# -------------------------------
+# DELETE ALL CHUNKS BY caption_id
+# -------------------------------
+
+def delete_points_by_caption_id(
+    client: QdrantClient,
+    collection_name: str,
+    caption_id: int
+) -> None:
+    """
+    Deletes all points (chunks) whose payload contains caption_id == given id.
+    """
+    if client is None:
+        raise ValueError("Qdrant client cannot be None.")
+
+    filt = models.Filter(
+        must=[
+            models.FieldCondition(
+                key="caption_id",
+                match=models.MatchValue(value=caption_id)
+            )
+        ]
+    )
+
+    client.delete(
+        collection_name=collection_name,
+        points_selector=models.FilterSelector(filter=filt)
+    )
+    print(f"🗑️ Deleted all chunks with caption_id={caption_id} from '{collection_name}'.")

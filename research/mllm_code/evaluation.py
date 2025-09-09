@@ -1,4 +1,4 @@
-from google.colab import userdata
+#from google.colab import userdata
 import requests
 import json
 import google.generativeai as genai

@@ -1,9 +1,9 @@
 import os
 from typing import List, Tuple
-from prompts import system_prompt, questions
-from mllm_helper import LlamaPromptGenerator, LlamaCaptionGenerator
-from evaluation import CaptionEvaluator
-from database_pipeline.database_operations import create_table_if_not_exists, save_filename_and_captions
+from mllm_code.prompts import system_prompt, questions
+from mllm_code.mllm_helper import LlamaPromptGenerator, LlamaCaptionGenerator
+from mllm_code.evaluation import CaptionEvaluator
+from mllm_code.database_pipeline.database_operations import create_table_if_not_exists, save_filename_and_captions
 
 class Captions:
     """
@@ -47,26 +47,27 @@ class Captions:
 
     def _llama(self):
         """Run caption generation with LLaMA model in batches."""
-        print("Running LLAMA -4")
+        print("Running LLAMA -4\n")
         model_name = 'meta/llama-4-maverick-17b-128e-instruct'
         invoke_url = "https://integrate.api.nvidia.com/v1/chat/completions"
 
         for batch in self._batch_iterator(self.image_files, self.batch_size):
-            print(f"\nProcessing batch of {len(batch)} images...")
+            print(f"\nProcessing batch of {len(batch)} images...\n")
             captions_with_metadata = []
 
             for image_file in batch:
                 for question in self.questions:
+                    print(image_file)
                     prompt, location, basename = LlamaPromptGenerator(image_file, question)
                     caption = LlamaCaptionGenerator(image_file, system_prompt, prompt, model_name, invoke_url)
-                    print("Evaluating caption")
+                    print("Evaluating caption\n")
                     # Evaluate caption
                     is_accepted = self.evaluation(caption)
                     is_evaluated = True
-                    print("Caption evaluated")
+                    print("Caption evaluated\n")
                     # Collect metadata
                     captions_with_metadata.append((basename, location, caption, is_accepted, is_evaluated))
-            print("captions_with_metadata", captions_with_metadata)
+            #print("captions_with_metadata", captions_with_metadata)
             # save batch after processing
             self._save_caption(captions_with_metadata)
 
@@ -76,7 +77,7 @@ class Captions:
         invoke_url = "https://ai.api.nvidia.com/v1/vlm/microsoft/kosmos-2"
 
         for batch in self._batch_iterator(self.image_files, self.batch_size):
-            print(f"\nProcessing batch of {len(batch)} images...")
+            print(f"\nProcessing batch of {len(batch)} images...\n")
             captions_with_metadata = []
 
             for image_file in batch:

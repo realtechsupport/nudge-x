@@ -6,7 +6,7 @@ from PIL import Image
 import io
 from typing import List, Tuple
 
-from config.database_config import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT
+from mllm_code.config.database_config import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT
 
 def connect_db():
     """Establishes a connection to the PostgreSQL database."""
@@ -47,8 +47,7 @@ def create_table_if_not_exists():
                     id SERIAL PRIMARY KEY,
                     caption_id INT REFERENCES captions(id) ON DELETE CASCADE,
                     embedding_added BOOLEAN DEFAULT FALSE,
-                    embedding_created_at TIMESTAMP,
-                    qdrant_point_id UUID
+                    embedding_created_at TIMESTAMP
                 );
             """)
 
@@ -100,3 +99,85 @@ def save_filename_and_captions(captions_with_metadata: List[Tuple[str, str, str,
         conn.close()
 
 
+
+
+def fetch_captions_without_embeddings(limit: int = 50):
+    """
+    Returns a list of captions that are accepted and do not yet have embeddings added.
+
+    Each row is returned as a dict with keys matching expected usage:
+    id, filename, location, caption, is_accepted, is_evaluated, created_at
+    """
+    conn = connect_db()
+    if conn is None:
+        return []
+
+    try:
+        cursor = conn.cursor()
+        # Select captions that are accepted AND either have no row in caption_embeddings
+        # or have a row with embedding_added = FALSE
+        query = """
+            SELECT c.id, c.filename, c.location, c.caption, c.is_accepted, c.is_evaluated, c.created_at
+            FROM captions c
+            LEFT JOIN caption_embeddings ce ON ce.caption_id = c.id
+            WHERE c.is_accepted = TRUE
+              AND (ce.id IS NULL OR ce.embedding_added = FALSE)
+            ORDER BY c.created_at DESC
+            LIMIT %s;
+        """
+        cursor.execute(query, (limit,))
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        result = [dict(zip(columns, row)) for row in rows]
+        return result
+    except Exception as e:
+        print(f"Error fetching captions without embeddings: {e}")
+        return []
+    finally:
+        if conn:
+            cursor.close()
+            conn.close()
+
+
+def mark_embeddings_added(caption_ids: List[int]):
+    """
+    Marks embeddings as added for the provided caption IDs.
+
+    Args:
+        caption_ids: list of caption_id values to mark as embedded
+    """
+    if not caption_ids:
+        return
+
+    conn = connect_db()
+    if conn is None:
+        return
+
+    try:
+        cursor = conn.cursor()
+
+        # For each caption_id, try UPDATE first; if no row was updated, INSERT a new one
+        update_sql = """
+            UPDATE caption_embeddings
+               SET embedding_added = TRUE,
+                   embedding_created_at = CURRENT_TIMESTAMP
+             WHERE caption_id = %s;
+        """
+        insert_sql = """
+            INSERT INTO caption_embeddings (caption_id, embedding_added, embedding_created_at)
+            VALUES (%s, TRUE, CURRENT_TIMESTAMP);
+        """
+
+        for caption_id in caption_ids:
+            cursor.execute(update_sql, (caption_id,))
+            if cursor.rowcount == 0:
+                cursor.execute(insert_sql, (caption_id,))
+
+        conn.commit()
+    except Exception as e:
+        print(f"Error marking embeddings added: {e}")
+        conn.rollback()
+    finally:
+        if conn:
+            cursor.close()
+            conn.close()
