@@ -3,6 +3,7 @@ from qdrant_client import QdrantClient, models
 from sentence_transformers import SentenceTransformer
 import uuid
 import numpy as np
+import os
 
 # -------------------------------
 # QDRANT CLIENT INITIALIZATION
@@ -28,6 +29,36 @@ def create_qdrant_client_testing() -> QdrantClient:
     client = QdrantClient(":memory:")
     print("✅ Initialized in-memory Qdrant client (testing only).")
     return client
+
+
+def create_qdrant_client_api(
+    url: str,
+    api_key: str,
+    prefer_grpc: bool = False
+) -> QdrantClient:
+    """
+    Create a Qdrant client using an HTTP/GRPC API endpoint (e.g., Qdrant Cloud).
+
+    Args:
+        url: Base URL like "https://YOUR-CLUSTER-URL.qdrant.xyz". If None, reads QDRANT_URL.
+        api_key: API key/token. If None, reads QDRANT_API_KEY.
+        prefer_grpc: Use gRPC if True; otherwise HTTP.
+
+    Returns:
+        Initialized QdrantClient.
+    """
+    if not url:
+        raise ValueError("Qdrant URL is required.")
+    if not api_key:
+        raise ValueError("Qdrant API key is required.")
+
+    client = QdrantClient(url=url, api_key=api_key, prefer_grpc=prefer_grpc)
+    try:
+        client.get_collections()
+        print(f"✅ Connected to Qdrant API at {url} (gRPC={prefer_grpc}).")
+        return client
+    except Exception as e:
+        raise ConnectionError(f"❌ Failed to connect to Qdrant at {url}: {e}")
 
 
 # -------------------------------

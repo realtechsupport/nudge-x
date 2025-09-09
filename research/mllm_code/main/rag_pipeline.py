@@ -7,8 +7,9 @@ from qdrant_client.models import Distance, VectorParams
 from sentence_transformers import SentenceTransformer
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
+from mllm_code.config.database_config import *
 from mllm_code.exception import mllmException
-from mllm_code.database_pipeline.vector_db_operations import create_qdrant_client, create_qdrant_client_testing
+from mllm_code.database_pipeline.vector_db_operations import create_qdrant_client, create_qdrant_client_testing, create_qdrant_client_api
 from mllm_code.database_pipeline.database_operations import fetch_captions_without_embeddings, mark_embeddings_added
 from mllm_code.database_pipeline.vector_db_operations import (
     create_qdrant_client,
@@ -22,9 +23,9 @@ load_dotenv()
 # ---  CORE RAG LOGIC ---
 # This class handles the retrieval and generation steps of the RAG pipeline
 class RAGSystem:
-    def __init__(self, collection_name: str, model_name: str, qdrant_host: str, qdrant_port: int):
-        # Connect to the external Qdrant instance
-        self.client = QdrantClient(host=qdrant_host, port=qdrant_port)
+    def __init__(self, collection_name: str, model_name: str, qdrant_host: str | None = None, qdrant_port: int | None = None, client: QdrantClient | None = None):
+        # Use provided client or fall back to host/port
+        self.client = client if client is not None else QdrantClient(host=qdrant_host, port=qdrant_port)
         self.collection_name = collection_name
         self.model = SentenceTransformer(model_name)
         self.vector_size = self.model.get_sentence_embedding_dimension()
@@ -79,16 +80,23 @@ class RAGSystem:
 
 # --- 2. MAIN EXECUTION ---
 if __name__ == "__main__":
-    # Get Qdrant connection details from environment variables
-    qdrant_host = os.getenv("QDRANT_HOST", "localhost")
-    qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
+    # Determine Qdrant mode
+    qdrant_mode = os.getenv("QDRANT_MODE", "production").lower()
+
+    if qdrant_mode == "testing":
+        client = create_qdrant_client_testing()
+    elif qdrant_mode == "api":
+        client = create_qdrant_client_api(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+    else:
+        qdrant_host = os.getenv("QDRANT_HOST", "localhost")
+        qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
+        client = create_qdrant_client(host=qdrant_host, port=qdrant_port)
     
     # Initialize the RAG system
     rag = RAGSystem(
         collection_name="captions_collection",
         model_name="sentence-transformers/all-MiniLM-L6-v2",
-        qdrant_host=qdrant_host,
-        qdrant_port=qdrant_port
+        client=client
     )
 
     while True:

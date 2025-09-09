@@ -2,10 +2,12 @@ import sys
 import tiktoken
 from mllm_code.exception import mllmException
 from dotenv import load_dotenv
+from mllm_code.config.database_config import *
 from mllm_code.database_pipeline.database_operations import *
 from mllm_code.database_pipeline.vector_db_operations import (
     create_qdrant_client,
     create_qdrant_client_testing,
+    create_qdrant_client_api,
     initialize_embedding_model,
     add_captions_to_vector_db,
 )
@@ -41,12 +43,19 @@ def main():
     # Mode: production (external Qdrant) or testing (in-memory)
     qdrant_mode = os.getenv("QDRANT_MODE", "production").lower()
 
-    collection_name = "captions_collection"
-    model_name = "sentence-transformers/all-MiniLM-L6-v2"
+    collection_name = QDRANT_COLLECTION_NAME
+    model_name = EMBEDDING_MODEL_NAME
 
     # Connect to Qdrant
     if qdrant_mode == "testing":
         client = create_qdrant_client_testing()
+    elif qdrant_mode == "api":
+        # Read API connection details explicitly
+        qdrant_url = os.getenv("QDRANT_URL")
+        qdrant_api_key = os.getenv("QDRANT_API_KEY")
+        if not qdrant_url or not qdrant_api_key:
+            raise ValueError("QDRANT_URL and QDRANT_API_KEY must be set for QDRANT_MODE=api")
+        client = create_qdrant_client_api(url=qdrant_url, api_key=qdrant_api_key)
     else:
         qdrant_host = os.getenv("QDRANT_HOST", "localhost")
         qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
@@ -57,10 +66,7 @@ def main():
     if not pending:
         print("No accepted captions found for embedding.")
         # Optionally show current collection contents if it exists
-        try:
-            _print_points(client, collection_name, limit=20)
-        except Exception:
-            pass
+
         return
 
     print(f"Found {len(pending)} accepted captions without embeddings. Embedding now...")
