@@ -8,7 +8,7 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # --- Model Configs ---
-MODEL_NAME = "gemini-1.5-flash"   # can swap to another easily
+MODEL_NAME = "gemini-1.5-flash"   
 TEMPERATURE = 0.1
 TOP_P = 0.95
 TOP_K = 20
