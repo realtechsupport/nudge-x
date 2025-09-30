@@ -21,7 +21,7 @@ def connect_db():
         return conn
     except Error as e:
         print(f"Error connecting to PostgreSQL: {e}")
-        return None
+        raise
 
 def create_table_if_not_exists():
     """Creates necessary tables in the database if they don't exist."""

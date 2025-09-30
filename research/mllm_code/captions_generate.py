@@ -59,6 +59,8 @@ class Captions:
                 for question in self.questions:
                     print(image_file)
                     prompt, location, basename = LlamaPromptGenerator(image_file, question)
+                    
+
                     caption = LlamaCaptionGenerator(image_file, system_prompt, prompt, model_name, invoke_url)
                     print("Evaluating caption\n")
                     # Evaluate caption

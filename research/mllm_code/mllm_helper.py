@@ -27,10 +27,12 @@ def compress_image(image_path, max_size=(512,512), quality=70):
 def get_metadata_description(location_name: str) -> str:
     """Return site description by fuzzy matching location."""
     location_name = location_name.strip().lower()
-    for site, desc in zip(metadata_df['Site Name'], metadata_df['Description']):
+    for site, desc in zip(metadata_df['Mine name'], metadata_df['metadata']):
         if location_name in site.lower():
+            print("Meta data found for this site")
             return desc
-    return "No specific metadata found for this site."
+    print("No meta data found for this site")
+    return None
 
 #------------------------------------------------------------------------------------------------------------
 def time_it(func):
@@ -98,7 +100,7 @@ def KosmosCaptionGenerator_N(image_file_path, prompt, invoke_url):
     return response.json()["choices"][0]["message"]["content"]
 
 #------------------------------------------------------------------------------------------------------------
-def LlamaPromptGenerator(image_file_path: str, question: str, multi_shot_examples: str = "") -> tuple:
+def LlamaPromptGenerator(image_file_path: str, question: str, multi_shot_examples: str = multi_shot_examples) -> tuple:
     try:
         info = os.path.splitext(image_file_path)[0]
         basename = info.split('/')[-1]
@@ -116,6 +118,8 @@ def LlamaPromptGenerator(image_file_path: str, question: str, multi_shot_example
             return "Error: Filename format not recognized."
 
         site_description = get_metadata_description(location)
+        site_description_text = f"Location Metadata:\n{site_description}" if site_description else ""
+
         prompt =  f"""
         You are analyzing a Sentinel-2 satellite image.
 
@@ -123,17 +127,15 @@ def LlamaPromptGenerator(image_file_path: str, question: str, multi_shot_example
         Location: {location}
         Date: {date}
         Image Type: {image_type}
-        Location Metadata:
-        {site_description}
+        {site_description_text}
 
         Answer the following, strictly using the image above:
         {question}
         """.strip()
 
         if multi_shot_examples:
-            return f" {prompt} \n Examples are provided below as reference. Use them to guide your analysis.\n\n{multi_shot_examples.strip()}"
-        else:
-            return prompt, location, basename
+            prompt = f" {prompt} \n Examples are provided below as reference. Use them to guide your analysis.\n\n{multi_shot_examples.strip()}"
+        return prompt, location, basename
     except Exception as e:
         raise mllmException(e, sys)
 
