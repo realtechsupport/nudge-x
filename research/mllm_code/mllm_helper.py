@@ -1,5 +1,5 @@
 # Helper files to work with MLLM LLama-4
-# May 2025
+# May - Oct 2025
 
 import os
 import requests, base64
@@ -163,3 +163,4 @@ def KosmosCaptionGenerator(image_path, model_name, processor, prompt, maxtokens=
     caption, entities = processor.post_process_generation(generated_text)
 
     return caption, entities
+
