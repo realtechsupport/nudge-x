@@ -64,6 +64,6 @@ Answer: A thick layer of smog and haze hangs over a major urban center. The atmo
 common_prompt = """Identify and describe land use patterns, infrastructure, natural formations, vegetation coverage, and any visible human activities."""
 
 #COMMON FOR BOTH MODELS
-questions = ["Focus on the image elements that shows environmental degradation or pollution.",
+questions = ["Focus on the image elements that are indicative of environmental degradation or pollution.",
                    "Which environmental hazards are present in this Sentinel-2 satellite image?"]
 

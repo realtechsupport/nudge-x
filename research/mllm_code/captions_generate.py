@@ -62,6 +62,7 @@ class Captions:
                     
 
                     caption = LlamaCaptionGenerator(image_file, system_prompt, prompt, model_name, invoke_url)
+                    
                     print("Evaluating caption\n")
                     # Evaluate caption
                     is_accepted = self.evaluation(caption)
@@ -108,13 +109,14 @@ class Captions:
             caption=caption,
             model="gemini",
             weights={
-                "Environmental_Focus": 0.3,
-                "Scientific_Accuracy_Plausibility": 0.3,
-                "Specificity_Terminology": 0.2,
-                "Processes_Patterns_Changes": 0.1,
-                "Adherence_to_Constraints": 0.05,
-                "Conciseness": 0.05
+                "Environmental_Focus": 1/5,
+                "Specificity_Terminology": 1/5,
+                "Processes_Patterns": 1/5,
+                "Adherence_to_Constraints": 1/5,
+                "Conciseness": 1/5  
             },
-            threshold=2.0
+            threshold=3.0
         )
-        return bool(result)
+        print("scores\n",result["scores"])
+        print("decision\n",result["decision"])
+        return bool(result["decision"])

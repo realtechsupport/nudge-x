@@ -3,6 +3,7 @@ import requests
 import json
 import google.generativeai as genai
 import anthropic
+from mllm_code.config.settings import EVALUATION_MODEL_NAME
 
 class CaptionEvaluator:
     """
@@ -95,24 +96,22 @@ class CaptionEvaluator:
         # Default equal weights if none provided (all 6 categories)
         if weights is None:
             weights = {
-                "Environmental_Focus": 1/6,
-                "Scientific_Accuracy_Plausibility": 1/6,
-                "Specificity_Terminology": 1/6,
-                "Processes_Patterns_Changes": 1/6,
-                "Adherence_to_Constraints": 1/6,
-                "Conciseness": 1/6
+                "Environmental_Focus": 1/5,
+                "Specificity_Terminology": 1/5,
+                "Processes_Patterns": 1/5,
+                "Adherence_to_Constraints" : 1/5,
+                "Conciseness": 1/5
             }
         
         # Calculate weighted score
         weighted_score = (
-            evaluation_result.get("Environmental_Focus", 0) * weights.get("Environmental_Focus", 0) +
-            evaluation_result.get("Scientific_Accuracy_Plausibility", 0) * weights.get("Scientific_Accuracy_Plausibility", 0) +
-            evaluation_result.get("Specificity_Terminology", 0) * weights.get("Specificity_Terminology", 0) +
-            evaluation_result.get("Processes_Patterns_Changes", 0) * weights.get("Processes_Patterns_Changes", 0) +
-            evaluation_result.get("Adherence_to_Constraints", 0) * weights.get("Adherence_to_Constraints", 0) +
-            evaluation_result.get("Conciseness", 0) * weights.get("Conciseness", 0)
+            evaluation_result.get("Environmental_Focus", 0) * weights.get("Environmental_Focus") +
+            evaluation_result.get("Specificity_Terminology", 0) * weights.get("Specificity_Terminology") +
+            evaluation_result.get("Processes_Patterns", 0) * weights.get("Processes_Patterns") +
+            evaluation_result.get("Adherence_to_Constraints", 0) * weights.get("Adherence_to_Constraints") +
+            evaluation_result.get("Conciseness", 0) * weights.get("Conciseness")
         )
-        
+        print("Score:",weighted_score)
         # Return 1 if weighted score meets or exceeds threshold, 0 otherwise
         return 1 if weighted_score >= threshold else 0
     
@@ -127,7 +126,7 @@ class CaptionEvaluator:
             str: The formatted judge prompt
         """
         return f"""
-You are an expert environmental analyst and a meticulous reviewer of satellite imagery captions. Your task is to critically evaluate a generated caption for its scientific accuracy, environmental focus, specificity, and adherence to professional standards, based *solely on the text of the caption itself*.
+You are an expert environmental analyst and a meticulous reviewer of satellite imagery captions. Your task is to critically evaluate a generated caption for its accuracy, environmental focus, specificity, and adherence to professional standards, based *solely on the text of the caption itself*.
 
 CONTEXT:
 The captions describe environmental conditions observed in satellite images. 
@@ -154,12 +153,12 @@ EVALUATION CRITERIA (Rate each on a scale of 1-5, where 1 is the lowest and 5 th
 * **2. Accuracy & Plausibility (Self-Contained):**
     * 1: Contains significant factual errors or clear textual hallucinations (describing things that are inconsistent within the caption itself).
     * 3: Mostly plausible but with minor inaccuracies or vague statements.
-    * 5: Scientifically precise, factually plausible, with no observable hallucinations or inconsistencies.
+    * 5: Factually plausible, with no observable hallucinations or inconsistencies.
 * **3. Specificity & Terminology:**
     * 1: Uses generic, vague language; lacks specific environmental or scientific terminology.
     * 3: Uses some environmental terminology but could be more specific or precise.
     * 5: Employs precise, specific environmental terminology (e.g., "riparian vegetation", "open pit mining", "urban heat island effect," "Normalized Difference Vegetation Index") where appropriate.
-* **4. Description of Processes/Patterns:**
+* **4. Description of Processes and Patterns:**
     * 1: Only lists static objects; no mention of patterns, changes, or processes.
     * 3: Mentions some patterns or changes, but not central to the description or lacks depth.
     * 5: Effectively describes spatial patterns, and underlying environmental processes.
@@ -188,19 +187,18 @@ Reasoning:
         """Helper function to call Gemini API using the Google Generative AI client library"""
         try:
             # Create the model instance
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            model = genai.GenerativeModel(EVALUATION_MODEL_NAME)
             
             # Define the response schema for structured output
             response_schema = {
                 "type": "object",
                 "properties": {
                     "Environmental_Focus": {"type": "number"},
-                    "Accuracy_Plausibility": {"type": "number"},
                     "Specificity_Terminology": {"type": "number"},
                     "Processes_Patterns": {"type": "number"},
                     "Adherence_to_Constraints": {"type": "number"},
                     "Conciseness": {"type": "number"},
-                    "Overall_Content_Score": {"type": "number"},
+
                     "Reasoning": {"type": "string"}
                 }
             }
@@ -239,12 +237,10 @@ Reasoning:
                 "type": "object",
                 "properties": {
                     "Environmental_Focus": {"type": "number"},
-                    "Accuracy_Plausibility": {"type": "number"},
                     "Specificity_Terminology": {"type": "number"},
                     "Processes_Patterns": {"type": "number"},
                     "Adherence_to_Constraints": {"type": "number"},
                     "Conciseness": {"type": "number"},
-                    "Overall_Content_Score": {"type": "number"},
                     "Reasoning": {"type": "string"}
                 }
             }
@@ -307,16 +303,16 @@ Reasoning:
         if parsed_json:
             # Explicitly convert scores to float, defaulting to 0.0 if conversion fails
             # This ensures all scores are numbers, as requested.
+            
             return {
-                "Environmental_Focus": float(parsed_json.get("Environmental_Focus", 0)),
-                "Scientific_Accuracy_Plausibility": float(parsed_json.get("Accuracy_Plausibility", 0)),
-                "Specificity_Terminology": float(parsed_json.get("Specificity_Terminology", 0)),
-                "Processes_Patterns_Changes": float(parsed_json.get("Processes_Patterns", 0)),
-                "Adherence_to_Constraints": float(parsed_json.get("Adherence_to_Constraints", 0)),
-                "Conciseness": float(parsed_json.get("Conciseness", 0)),
-                "Overall_Content_Score": float(parsed_json.get("Overall_Content_Score", 0)),
+                "Environmental_Focus": float(parsed_json.get("Environmental_Focus")),
+                "Specificity_Terminology": float(parsed_json.get("Specificity_Terminology")),
+                "Processes_Patterns": float(parsed_json.get("Processes_Patterns")),
+                "Adherence_to_Constraints": float(parsed_json.get("Adherence_to_Constraints")),
+                "Conciseness": float(parsed_json.get("Conciseness")),
                 "Reasoning": reasoning_text
             }
+
         else:
             print("Failed to parse valid JSON from LLM response.")
             return None

@@ -17,7 +17,7 @@ from mllm_code.database_pipeline.vector_db_operations import (
     initialize_embedding_model,
     add_captions_to_vector_db,
 )
-
+from mllm_code.config.settings import DEEPSEEK_MODEL
 load_dotenv()
 
 # ---  CORE RAG LOGIC ---
@@ -78,7 +78,7 @@ class RAGSystem:
         except requests.exceptions.RequestException as e:
             return f"An error occurred during API call: {e}"
 
-    def generate_response_deepseek(self, query: str, context: str):
+    def generate_response_deepseek(self, query: str, context: str, model_name: str):
         """Calls DeepSeek Chat Completions API with the query and retrieved context.
 
         Args:
@@ -101,18 +101,18 @@ class RAGSystem:
             raise ValueError("DEEPSEEK_API_KEY environment variable not set.")
 
         url = "https://api.deepseek.com/chat/completions"
-        payload = {
-            "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_query_with_context}
-            ],
-            "temperature": 0.7
-        }
 
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
+        }
+        payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_query_with_context}
+        ],
+        "temperature": 0.7
         }
 
         try:
@@ -158,6 +158,6 @@ if __name__ == "__main__":
        
         
         # Generation step: get the LLM's answer
-        llm_response = rag.generate_response_deepseek(user_query, retrieved_context)
+        llm_response = rag.generate_response_deepseek(user_query, retrieved_context, model_name=DEEPSEEK_MODEL)
         print("\nLLM Response:", llm_response)
         print("--------------------------------------------------")
