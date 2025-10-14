@@ -46,27 +46,27 @@ def time_it(func):
 #------------------------------------------------------------------------------------------------------------
 def LlamaCaptionGenerator(image_file_path, SYSTEM_PROMPT, prompt, model_name, invoke_url):
     stream = False
+    # HERE: Each of the input images (1-3) are from the same unique location and collected at the same time.
+    # The first input image is RGB and the subsequent ones, where made available, are bandoperations (NDBI, NDVI, etc).
     try:
         image_b64 = compress_image(image_file_path)
-
-
         headers = {
             "Authorization": f"Bearer {os.getenv('NVIDIA_API_KEY')}",
             "Accept": "text/event-stream" if stream else "application/json"
         }
-
         payload = {
             "model": model_name,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f""" {prompt} <img src="data:image/png;base64,{image_b64}" />"""}
+                # Sai: enable 1, 2 or max 3 input images (for example RGB, NDBI, NDVI)
+                # {"role": "user", "content": f""" {prompt} <img src="data:image/png;base64,{image_b64}" />"""}
             ],
             "max_tokens": 512,
             "temperature": 0.7,
             "top_p": 1.00,
             "stream": stream
         }
-
         response = requests.post(invoke_url, headers=headers, json=payload)
         return response.json()["choices"][0]["message"]["content"]
 
@@ -161,4 +161,5 @@ def KosmosCaptionGenerator(image_path, model_name, processor, prompt, maxtokens=
     processed_text = processor.post_process_generation(generated_text, cleanup_and_extract=False)
 
     caption, entities = processor.post_process_generation(generated_text)
+
     return caption, entities
