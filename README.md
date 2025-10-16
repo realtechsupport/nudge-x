@@ -1,3 +1,28 @@
+Instructions to run: 
+Clone repo:
+   https://github.com/realtechsupport/nudge-x 
+   cd nudge-x
+MacOS/Linux:
+1. python3 -m venv your_venv_name
+2. source your_venv_name/bin/activate
+3. pip install -r requirements.txt
+Windows:
+1. python -m venv my_venv
+2. my_venv\Scripts\activate
+3. pip install -r requirements.txt
+
+Always run any file inside research. 
+cd research 
+
+Example: To run captions_pipeline
+MacOS:
+python3 -m mllm_code.main.captions_pipeline 
+
+Windows: 
+python -m mllm_code.main.captions_pipeline 
+
+
+
 UI:
 
 Interactive Globe version built using Gemini 2.5 Flash.
