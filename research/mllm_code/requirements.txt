@@ -1,5 +1,5 @@
-openeo
-gdal
+#openeo
+#gdal
 rasterio
 scikit-image
 langchain-anthropic
