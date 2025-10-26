@@ -1,6 +1,7 @@
 Instructions to run: (Work in your own user in VM)
 
 Clone repo:
+   '''
    git clone --no-checkout https://github.com/realtechsupport/nudge-x.git
    cd nudge-x
    git sparse-checkout init --cone
