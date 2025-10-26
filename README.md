@@ -1,12 +1,12 @@
 Instructions to run: (Work in your own user in VM)
 
 Clone repo:
-   '''
-   git clone --no-checkout https://github.com/realtechsupport/nudge-x.git
-   cd nudge-x
-   git sparse-checkout init --cone
-   git sparse-checkout set research .env.example .gitignore
-   git checkout main
+  
+   git clone --no-checkout https://github.com/realtechsupport/nudge-x.git  
+   cd nudge-x  
+   git sparse-checkout init --cone  
+   git sparse-checkout set research .env.example .gitignore  
+   git checkout main  
 
 
 Make sure to create your own .env file. The template is found in .env.example file
