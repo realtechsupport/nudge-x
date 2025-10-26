@@ -1,7 +1,12 @@
-Instructions to run: 
+Instructions to run: (Work in your own user in VM)
+
 Clone repo:
-   https://github.com/realtechsupport/nudge-x 
+   git clone --no-checkout https://github.com/realtechsupport/nudge-x.git
    cd nudge-x
+   git sparse-checkout init --cone
+   git sparse-checkout set research .env.example .gitignore
+   git checkout main
+
 
 Make sure to create your own .env file. The template is found in .env.example file
 
@@ -13,8 +18,6 @@ MacOS/Linux:
 
 
 Windows:
-
-
 1. python -m venv my_venv
 2. my_venv\Scripts\activate
 3. pip install -r requirements.txt
@@ -28,7 +31,6 @@ python3 -m mllm_code.main.captions_pipeline
 
 Windows: 
 python -m mllm_code.main.captions_pipeline 
-
 
 
 UI:
