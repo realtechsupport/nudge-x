@@ -3,7 +3,7 @@ Instructions to run: (Work in your own user in VM)
 Clone repo:
   
    git clone --no-checkout https://github.com/realtechsupport/nudge-x.git  
-   cd nudge-x  
+   Make sure you are in nudge-x Ex: your_username@nudge-x:~/nudge-x$  
    git sparse-checkout init --cone  
    git sparse-checkout set research .env.example .gitignore  
    git checkout main  
