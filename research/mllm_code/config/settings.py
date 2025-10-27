@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 # Load .env file
 load_dotenv()
-
+mllm_model = "LLAMA"
 # --- Sensitive Data ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 

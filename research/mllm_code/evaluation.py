@@ -38,26 +38,23 @@ class CaptionEvaluator:
             
         Returns:
             dict: Complete evaluation results with scores, reasoning, and decision
-                  Returns None if evaluation fails
+                  
         """
         # Validate model choice
         if model.lower() not in ["gemini", "anthropic"]:
-            return {
-                "error": f"Unsupported model: {model}. Please use 'gemini' or 'anthropic'.",
-                "success": False
-            }
+            raise ValueError(
+                f"Unsupported model: {model}. Please use 'gemini' or 'anthropic'."
+            )
         
         # Check if API key is available for the chosen model
         if model.lower() == "gemini" and not self.gemini_api_key:
-            return {
-                "error": "Gemini API key not provided. Please set gemini_api_key during initialization.",
-                "success": False
-            }
+            raise ValueError(
+                "Gemini API key not provided. Please set gemini_api_key during initialization."
+            )
         elif model.lower() == "anthropic" and not self.anthropic_api_key:
-            return {
-                "error": "Anthropic API key not provided. Please set anthropic_api_key during initialization.",
-                "success": False
-            }
+            raise ValueError(
+                "Anthropic API key not provided. Please set anthropic_api_key during initialization."
+            )
         
         # Generate the judge prompt
         judge_prompt = self._create_judge_prompt(caption)
@@ -68,14 +65,7 @@ class CaptionEvaluator:
         else:
             evaluation_result = self._call_anthropic_api(judge_prompt)
         
-        # If evaluation failed, return error
-        if evaluation_result is None:
-            return {
-                "error": f"Failed to evaluate caption using {model}",
-                "success": False
-            }
-        
-        # Calculate decision
+        # Calculate decision (evaluation_result is always a dict here - exceptions are raised on failure)
         decision = self._calculate_decision(evaluation_result, weights, threshold)
         
         # Return complete results
@@ -89,31 +79,34 @@ class CaptionEvaluator:
         }
     
     def _calculate_decision(self, evaluation_result: dict, weights: dict = None, threshold: float = 3.5) -> int:
-        """Calculate binary decision based on evaluation results"""
-        if evaluation_result is None:
-            return 0
-        
-        # Default equal weights if none provided (all 6 categories)
+        """Calculate binary decision (0-1) based on weighted average of 0-5 category scores."""
+
+    # Default equal weights for 5 criteria
         if weights is None:
             weights = {
                 "Environmental_Focus": 1/5,
                 "Specificity_Terminology": 1/5,
                 "Processes_Patterns": 1/5,
-                "Adherence_to_Constraints" : 1/5,
+                "Adherence_to_Constraints": 1/5,
                 "Conciseness": 1/5
             }
-        
-        # Calculate weighted score
-        weighted_score = (
-            evaluation_result.get("Environmental_Focus", 0) * weights.get("Environmental_Focus") +
-            evaluation_result.get("Specificity_Terminology", 0) * weights.get("Specificity_Terminology") +
-            evaluation_result.get("Processes_Patterns", 0) * weights.get("Processes_Patterns") +
-            evaluation_result.get("Adherence_to_Constraints", 0) * weights.get("Adherence_to_Constraints") +
-            evaluation_result.get("Conciseness", 0) * weights.get("Conciseness")
-        )
-        print("Score:",weighted_score)
-        # Return 1 if weighted score meets or exceeds threshold, 0 otherwise
-        return 1 if weighted_score >= threshold else 0
+
+        # Validate all keys are present
+        required_keys = list(weights.keys())
+        missing = [k for k in required_keys if k not in evaluation_result]
+        if missing:
+            raise ValueError(f"Missing evaluation fields: {missing}")
+
+        # Compute weighted average (since weights sum to 1)
+        weighted_score = sum(evaluation_result[k] * weights[k] for k in required_keys)
+
+        print(f"Weighted Score: {weighted_score:.2f} / 5 | Threshold: {threshold:.2f}\n")
+
+        # Decision: 1 = accept / 0 = reject
+        return int(weighted_score >= threshold)
+
+
+
     
     def _create_judge_prompt(self, caption: str) -> str:
         """
@@ -182,14 +175,12 @@ Generated Caption: "{caption}"
 EVALUATION:
 Reasoning:
 """
-    
+
     def _call_gemini_api(self, judge_prompt: str) -> dict:
-        """Helper function to call Gemini API using the Google Generative AI client library"""
+        """Call the Gemini API and return structured JSON output."""
         try:
-            # Create the model instance
             model = genai.GenerativeModel(EVALUATION_MODEL_NAME)
-            
-            # Define the response schema for structured output
+
             response_schema = {
                 "type": "object",
                 "properties": {
@@ -198,16 +189,14 @@ Reasoning:
                     "Processes_Patterns": {"type": "number"},
                     "Adherence_to_Constraints": {"type": "number"},
                     "Conciseness": {"type": "number"},
-
                     "Reasoning": {"type": "string"}
                 }
             }
-            
-            # Generate content with structured output
+
             response = model.generate_content(
                 judge_prompt,
                 generation_config={
-                    "temperature": 0.1,  # Low temperature for consistent evaluation
+                    "temperature": 0.1,
                     "top_p": 0.95,
                     "top_k": 20,
                     "candidate_count": 1,
@@ -215,16 +204,21 @@ Reasoning:
                     "response_schema": response_schema
                 }
             )
+
+            # ✅ Check content and parse safely
+            text = getattr(response, "text", None)
+            if not text:
+                raise ValueError("Gemini API returned empty or invalid response")
             
-            # Extract the JSON response
-            if response.text:
-                return self._parse_llm_response(response.text)
-            else:
-                return None
-                
+            return self._parse_llm_response(text)
+
+        except genai.errors.APIError as e:
+            raise RuntimeError(f"Gemini API call failed: {e}") from e
+
         except Exception as e:
-            print(f"Gemini API request failed: {e}")
-            return None
+            raise RuntimeError(f"Unexpected error during Gemini evaluation: {e}") from e
+
+
 
     def _call_anthropic_api(self, judge_prompt: str) -> dict:
         """Helper function to call Anthropic API using the Anthropic client library"""
@@ -265,54 +259,57 @@ Reasoning:
             # Extract the JSON response
             if response.content and len(response.content) > 0:
                 json_string = response.content[0].text
+
                 return self._parse_llm_response(json_string)
             else:
-                return None
+                raise RuntimeError("Anthropic API returned empty response")
                 
         except Exception as e:
-            print(f"Anthropic API request failed: {e}")
-            return None
+            raise RuntimeError(f"Anthropic API request failed: {e}") from e
+
+
 
     def _parse_llm_response(self, json_string: str) -> dict:
-        """Helper function to parse LLM response and extract scores"""
-        parsed_json = None
-        reasoning_text = ""
+        """Parse LLM response and extract numeric scores + reasoning text."""
 
         try:
+            # Try direct JSON parse first
             parsed_json = json.loads(json_string)
             reasoning_text = parsed_json.get("Reasoning", "")
+
         except json.JSONDecodeError:
-            json_start_index = json_string.find('{')
-            json_end_index = json_string.rfind('}')
-            if json_start_index != -1 and json_end_index != -1 and json_end_index > json_start_index:
-                json_sub_string = json_string[json_start_index : json_end_index + 1]
-                try:
-                    parsed_json = json.loads(json_sub_string)
-                    reasoning_text = json_string[:json_start_index].strip()
-                    if reasoning_text.startswith("Reasoning:"):
-                        reasoning_text = reasoning_text[len("Reasoning:"):].strip()
-                    if parsed_json.get("Reasoning"):
-                        reasoning_text = parsed_json["Reasoning"]
-                except json.JSONDecodeError as e:
-                    print(f"Error parsing extracted JSON substring: {e}")
-                    return None
-            else:
-                print("Could not find valid JSON structure in LLM response.")
-                return None
+            # Try to extract JSON portion if mixed text+JSON
+            json_start = json_string.find('{')
+            json_end = json_string.rfind('}')
+            if json_start == -1 or json_end == -1 or json_end < json_start:
+                raise RuntimeError("No valid JSON found in LLM response.")
 
-        if parsed_json:
-            # Explicitly convert scores to float, defaulting to 0.0 if conversion fails
-            # This ensures all scores are numbers, as requested.
-            
+            json_sub = json_string[json_start:json_end + 1]
+            reasoning_text = json_string[:json_start].strip()
+
+            try:
+                parsed_json = json.loads(json_sub)
+            except json.JSONDecodeError as e:
+                raise RuntimeError(f"Failed to parse extracted JSON: {e}") from e
+
+            # Clean reasoning
+            if reasoning_text.lower().startswith("reasoning:"):
+                reasoning_text = reasoning_text[len("Reasoning:"):].strip()
+
+            # Prefer reasoning field in parsed JSON if present
+            reasoning_text = parsed_json.get("Reasoning", reasoning_text)
+
+        # 3️⃣ Validate keys and cast to float
+        try:
             return {
-                "Environmental_Focus": float(parsed_json.get("Environmental_Focus")),
-                "Specificity_Terminology": float(parsed_json.get("Specificity_Terminology")),
-                "Processes_Patterns": float(parsed_json.get("Processes_Patterns")),
-                "Adherence_to_Constraints": float(parsed_json.get("Adherence_to_Constraints")),
-                "Conciseness": float(parsed_json.get("Conciseness")),
-                "Reasoning": reasoning_text
+                "Environmental_Focus": float(parsed_json["Environmental_Focus"]),
+                "Specificity_Terminology": float(parsed_json["Specificity_Terminology"]),
+                "Processes_Patterns": float(parsed_json["Processes_Patterns"]),
+                "Adherence_to_Constraints": float(parsed_json["Adherence_to_Constraints"]),
+                "Conciseness": float(parsed_json["Conciseness"]),
+                "Reasoning": reasoning_text,
             }
+        except (KeyError, TypeError, ValueError) as e:
+            raise RuntimeError(f"Invalid JSON structure or missing fields: {e}") from e
 
-        else:
-            print("Failed to parse valid JSON from LLM response.")
-            return None
+    

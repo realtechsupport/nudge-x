@@ -1,4 +1,5 @@
 import os
+import json
 from typing import List, Tuple
 from mllm_code.prompts import system_prompt, questions
 from mllm_code.mllm_helper import LlamaPromptGenerator, LlamaCaptionGenerator
@@ -28,6 +29,14 @@ class Captions:
             for f in os.listdir(images_folder_path)
             if f.lower().endswith((".png", ".jpg", ".jpeg"))
         ]
+        
+        # Validate that images were found
+        if not self.image_files:
+            raise ValueError(
+                f"No images found in the specified folder!\n"
+                f"   Searched in: {images_folder_path}\n"
+                f"   Supported formats: .png, .jpg, .jpeg"
+            )
 
     def _save_caption(self, captions_with_metadata: List[Tuple[str, str, str, bool, bool]]):
         """Save a batch of captions with evaluation metadata to DB."""
@@ -57,12 +66,13 @@ class Captions:
 
             for image_file in batch:
                 for question in self.questions:
-                    print(image_file)
+                    print(f"Processing image: {image_file}\n")
                     prompt, location, basename = LlamaPromptGenerator(image_file, question)
                     
 
                     caption = LlamaCaptionGenerator(image_file, system_prompt, prompt, model_name, invoke_url)
-                    
+                    print("Caption generated: ", caption)
+                    print("\n")
                     print("Evaluating caption\n")
                     # Evaluate caption
                     is_accepted = self.evaluation(caption)
@@ -100,23 +110,30 @@ class Captions:
 
     def evaluation(self, caption: str) -> bool:
         """Evaluate caption and return acceptance flag."""
-        evaluator = CaptionEvaluator(
-            gemini_api_key=os.getenv("GOOGLE_API_KEY"),
-            anthropic_api_key=""
-        )
+        try:
+            evaluator = CaptionEvaluator(
+                gemini_api_key=os.getenv("GOOGLE_API_KEY"),
+                anthropic_api_key=""
+            )
 
-        result = evaluator.evaluate(
-            caption=caption,
-            model="gemini",
-            weights={
-                "Environmental_Focus": 1/5,
-                "Specificity_Terminology": 1/5,
-                "Processes_Patterns": 1/5,
-                "Adherence_to_Constraints": 1/5,
-                "Conciseness": 1/5  
-            },
-            threshold=3.0
-        )
-        print("scores\n",result["scores"])
-        print("decision\n",result["decision"])
-        return bool(result["decision"])
+            result = evaluator.evaluate(
+                caption=caption,
+                model="gemini",
+                weights={
+                    "Environmental_Focus": 1/5,
+                    "Specificity_Terminology": 1/5,
+                    "Processes_Patterns": 1/5,
+                    "Adherence_to_Constraints": 1/5,
+                    "Conciseness": 1/5  
+                },
+                threshold=3.0
+            )
+            required_keys = {"scores", "decision"}
+            if not result or not required_keys.issubset(result.keys()):
+                raise RuntimeError(f"Incomplete evaluation result: {result}")
+            print("scores: \n", json.dumps(result["scores"], indent=4))
+            print("decision: ", result["decision"], "\n")
+            return bool(result["decision"])
+        except Exception as e:
+            raise RuntimeError("Evaluation failed") from e
+

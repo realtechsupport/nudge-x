@@ -4,11 +4,11 @@ from mllm_code.exception import mllmException
 from mllm_code.captions_generate import Captions
 from dotenv import load_dotenv
 from mllm_code.prompts import questions
+from mllm_code.config.settings import mllm_model
 load_dotenv()
 
 
 # Step 1: Generate and save captions only
-mllm_model = "LLAMA"
 images_folder_path = os.getenv("IMAGE_DIR") # Path to the test images folder
 batch_size = 2
 

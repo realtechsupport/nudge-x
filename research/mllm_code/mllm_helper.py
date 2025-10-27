@@ -29,9 +29,9 @@ def get_metadata_description(location_name: str) -> str:
     location_name = location_name.strip().lower()
     for site, desc in zip(metadata_df['Mine name'], metadata_df['metadata']):
         if location_name in site.lower():
-            print("Meta data found for this site")
+            print("Meta data found for this site\n")
             return desc
-    print("No meta data found for this site")
+    print("No meta data found for this site\n")
     return None
 
 #------------------------------------------------------------------------------------------------------------
@@ -48,30 +48,54 @@ def LlamaCaptionGenerator(image_file_path, SYSTEM_PROMPT, prompt, model_name, in
     stream = False
     # HERE: Each of the input images (1-3) are from the same unique location and collected at the same time.
     # The first input image is RGB and the subsequent ones, where made available, are bandoperations (NDBI, NDVI, etc).
-    try:
-        image_b64 = compress_image(image_file_path)
-        headers = {
-            "Authorization": f"Bearer {os.getenv('NVIDIA_API_KEY')}",
-            "Accept": "text/event-stream" if stream else "application/json"
-        }
-        payload = {
-            "model": model_name,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f""" {prompt} <img src="data:image/png;base64,{image_b64}" />"""}
-                # Sai: enable 1, 2 or max 3 input images (for example RGB, NDBI, NDVI)
-                # {"role": "user", "content": f""" {prompt} <img src="data:image/png;base64,{image_b64}" />"""}
-            ],
-            "max_tokens": 512,
-            "temperature": 0.7,
-            "top_p": 1.00,
-            "stream": stream
-        }
-        response = requests.post(invoke_url, headers=headers, json=payload)
-        return response.json()["choices"][0]["message"]["content"]
 
-    except Exception as e:
-        print(f"Error processing {image_file_path}: {e}")
+    image_b64 = compress_image(image_file_path)
+    headers = {
+        "Authorization": f"Bearer {os.getenv('NVIDIA_API_KEY')}",
+        "Accept": "text/event-stream" if stream else "application/json"
+    }
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f""" {prompt} <img src="data:image/png;base64,{image_b64}" />"""}
+            # Sai: enable 1, 2 or max 3 input images (for example RGB, NDBI, NDVI)
+            # {"role": "user", "content": f""" {prompt} <img src="data:image/png;base64,{image_b64}" />"""}
+        ],
+        "max_tokens": 512,
+        "temperature": 0.7,
+        "top_p": 1.00,
+        "stream": stream
+    }
+    try:
+        response = requests.post(invoke_url, headers=headers, json=payload)
+    except requests.RequestException as e:
+        raise RuntimeError(f"❌ API request failed: {e}")
+
+    #Validating response from API
+    #  ✅ Check HTTP response code
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"❌ Model API returned status {response.status_code}: {response.text}"
+        )
+
+    # ✅ Try parsing JSON safely
+    try:
+        response_json = response.json()
+    except ValueError:
+        raise RuntimeError(f"❌ Invalid JSON response from API: {response.text}")
+
+    # ✅ Validate structure
+    if (
+        "choices" not in response_json or
+        not response_json["choices"] or
+        "message" not in response_json["choices"][0] or
+        "content" not in response_json["choices"][0]["message"]
+    ):
+        raise RuntimeError(f"❌ Unexpected API response format: {response_json}")
+
+    return response_json["choices"][0]["message"]["content"]
+
 #------------------------------------------------------------------------------------------------------------
 def KosmosCaptionGenerator_N(image_file_path, prompt, invoke_url):
     stream = False
@@ -101,43 +125,53 @@ def KosmosCaptionGenerator_N(image_file_path, prompt, invoke_url):
 
 #------------------------------------------------------------------------------------------------------------
 def LlamaPromptGenerator(image_file_path: str, question: str, multi_shot_examples: str = multi_shot_examples) -> tuple:
-    try:
-        info = os.path.splitext(image_file_path)[0]
-        basename = info.split('/')[-1]
-        parts = basename.split("_")
 
-        # Check for band index image
-        if len(parts) == 3 and parts[1].isalpha() and '-' in parts[2]:
-            location, operation, date = parts
-            image_type = f"{operation.upper()} result from the bands of a Sentinel-2 image"
-        # Check for RGB image
-        elif len(parts) == 2 and '-' in parts[1]:
-            location, date = parts
-            image_type = "Sentinel-2 RGB composite image"
-        else:
-            return "Error: Filename format not recognized."
+    info = os.path.splitext(image_file_path)[0]
+    basename = info.split('/')[-1]
+    parts = basename.split("_")
 
-        site_description = get_metadata_description(location)
-        site_description_text = f"Location Metadata:\n{site_description}" if site_description else ""
+    # Check for band index image
+    if len(parts) == 3 and parts[1].isalpha() and '-' in parts[2]:
+        location, operation, date = parts
+        image_type = f"{operation.upper()} result from the bands of a Sentinel-2 image"
+    # Check for RGB image
+    elif len(parts) == 2 and '-' in parts[1]:
+        location, date = parts
+        image_type = "Sentinel-2 RGB composite image"
+    else:
+        raise ValueError(f"Filename format not recognized: {basename}")
 
-        prompt =  f"""
-        You are analyzing a Sentinel-2 satellite image.
+    site_description = get_metadata_description(location)
+    site_description_text = f"Location Metadata:\n{site_description}" if site_description else ""
 
-        Filename: {basename}
-        Location: {location}
-        Date: {date}
-        Image Type: {image_type}
-        {site_description_text}
+    prompt =  f"""
+    You are analyzing a Sentinel-2 satellite image.
 
-        Answer the following, strictly using the image above:
-        {question}
+    Filename: {basename}
+    Location: {location}
+    Date: {date}
+    Image Type: {image_type}
+    {site_description_text}
+
+    Answer the following, strictly using the image above:
+    {question}
+    """.strip()
+
+    if multi_shot_examples:
+        prompt = f"""
+        {prompt.strip()}
+
+        Below are several example inputs and their captions. 
+        Use them as style references when generating your caption for the current image.
+
+        ---
+        {multi_shot_examples.strip()}
+        ---
+
+        Now generate a caption consistent with the examples above.
         """.strip()
+    return prompt, location, basename
 
-        if multi_shot_examples:
-            prompt = f" {prompt} \n Examples are provided below as reference. Use them to guide your analysis.\n\n{multi_shot_examples.strip()}"
-        return prompt, location, basename
-    except Exception as e:
-        raise mllmException(e, sys)
 
 #------------------------------------------------------------------------------------------------------------
 def KosmosPromptGenerator(location, common_prompt, specific_prompt=""):

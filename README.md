@@ -9,7 +9,8 @@ Clone repo:
    git checkout main  
 
 
-Make sure to create your own .env file. The template is found in .env.example file
+Make sure to create your own .env file. The template is found in .env.example file  
+Make sure to add your_venv_name into .gitignore  
 
 
 MacOS/Linux:
