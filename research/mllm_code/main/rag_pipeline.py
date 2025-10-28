@@ -5,7 +5,7 @@ import json
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 from sentence_transformers import SentenceTransformer
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
 from mllm_code.config.database_config import *
 from mllm_code.exception import mllmException

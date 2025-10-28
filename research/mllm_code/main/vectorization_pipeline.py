@@ -14,7 +14,7 @@ from mllm_code.database_pipeline.vector_db_operations import (
 import os
 encoding = tiktoken.get_encoding("cl100k_base") 
 # 1. Import the text splitter
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 def num_tokens(text):
      
     return len(encoding.encode(text))
