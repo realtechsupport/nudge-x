@@ -212,10 +212,8 @@ Reasoning:
             
             return self._parse_llm_response(text)
 
-        except genai.errors.APIError as e:
-            raise RuntimeError(f"Gemini API call failed: {e}") from e
-
         except Exception as e:
+            # Catch all exceptions including API errors and AttributeError from genai.errors
             raise RuntimeError(f"Unexpected error during Gemini evaluation: {e}") from e
 
 

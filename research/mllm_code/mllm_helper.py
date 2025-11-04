@@ -17,8 +17,12 @@ from io import BytesIO
 metadata_csv = os.getenv('METADATA_CSV')
 metadata_df = pd.read_csv(metadata_csv)
 
-def compress_image(image_path, max_size=(512,512), quality=70):
-    img = Image.open(image_path).convert("RGB")
+def compress_image(image_path_or_image, max_size=(512,512), quality=70):
+    """Compress image from file path or PIL Image object."""
+    if isinstance(image_path_or_image, Image.Image):
+        img = image_path_or_image.convert("RGB")
+    else:
+        img = Image.open(image_path_or_image).convert("RGB")
     img.thumbnail(max_size)
     buffer = BytesIO()
     img.save(buffer, format="JPEG", quality=quality)
