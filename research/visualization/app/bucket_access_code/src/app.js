@@ -18,6 +18,13 @@ import { Wireframe } from "three/examples/jsm/lines/Wireframe.js";
 /* Keep captions hard-coded here; images are attached async from backend. */
 const baseSiteData = [
   {
+    name: "AidyrlaGoldDeposit",
+    lat: 18.9582,
+    lon: 72.8321,
+    severity: 5,
+    captions: ["The primary hazard is a large, active wildfire within a forested area..."],
+  },
+  {
     name: "Amable Pit",
     lat: -29.37833,
     lon: -69.94583,
@@ -36,7 +43,7 @@ const baseSiteData = [
     lat: -32.11833,
     lon: 151.97861,
     severity: 3,
-    captions: ["This satellite image shows Islamabad with its planned grid-like sectors."],
+    captions: ["This satellite image shows Avon North Open Pit."],
   },
   {
     name: "Bengalla Open-Cut Mine",
@@ -44,14 +51,7 @@ const baseSiteData = [
     lon: 150.84403,
     severity: 2,
     captions: ["This satellite image shows Bengalla Open-Cut Mine."],
-  },
-  {
-    name: "Bisha Mine",
-    lat: 15.51373,
-    lon: 37.50286,
-    severity: 1,
-    captions: ["This January 2025 satellite image shows Bisha Mine."],
-  },
+  }
 ];
 
 /* ----------------- Utility: severity color ----------------- */
@@ -83,7 +83,7 @@ function Globe() {
   const clickableObjectsRef = useRef([]); // array of Meshes for raycasting
   const animationFrameRef = useRef(null);
 
-  /* ----------------- Async: fetch GCS images (first 10) ----------------- */
+  /* ----------------- Async: fetch GCS images (first 5) ----------------- */
   useEffect(() => {
   let aborted = false;
 
@@ -321,13 +321,13 @@ function Globe() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once
 
-  return (
+return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-6">
-      <h1 className="text-4xl font-bold mb-6">Mining Sites Globe</h1>
+     
 
       <div
         ref={mountRef}
-        style={{ width: "100%", maxWidth: 1100, aspectRatio: "16/9", background: "#1f2937", borderRadius: 12 }}
+        style={{ width: "100%", maxWidth: 1550, aspectRatio: "16/9", background: "#1f2937", borderRadius: 12 }}
       />
 
       {!imagesLoaded ? (
@@ -357,7 +357,7 @@ function SiteDetail() {
   }
 
   const site = state;
-  console.log("SiteDetail state:", site);         
+  console.log("SiteDetail state:", site);        
   console.log("Image src being used:", site.image);
 
   return (
