@@ -3,10 +3,14 @@
 # -*- coding: utf-8 -*-
 # Nov 2024
 # https://pro.arcgis.com/en/pro-app/3.3/help/analysis/raster-functions/band-arithmetic-function.htm
-# May, July 2025 updated
+# May, July, Oct/ Nov 2025 updated
 # -------------------------------------------------------------------------------------------------
 
-import math, csv
+import os, math, csv
+import numpy
+import rasterio
+from skimage import exposure
+import matplotlib.pyplot as plt
 
 # -------------------------------------------------------------------------------------------------
 def get_coordinates(latitude,longitude,surface_area):
@@ -65,6 +69,24 @@ def create_job_type(connection, bbox, start, end, satellite, band_selection, max
         ndbi = (swir - nir) / (swir + nir)
         ndbi = ndbi.save_result(format="GTiff")
         job = ndbi.create_job(title = job_title)
+        
+    elif(aspect  == "ndbi_combo"):
+        #Built-up Index for mining - red, nir, swir
+        ndbi_combo = cube.filter_bands(["B04", "B08", "B12"])
+        ndbi_combo = ndbi_combo.save_result(format="GTiff")
+        job = ndbi_combo.create_job(title = job_title)
+        
+    elif(aspect  == "ndbi_rgb"):
+        #Built-up Index for mining - green, blue, red, nir, swir
+        ndbi_rgb = cube.filter_bands(["B02", "B03", "B04", "B08", "B12"])
+        ndbi_rgb = ndbi_rgb.save_result(format="GTiff")
+        job = ndbi_rgb.create_job(title = job_title)
+        
+    elif(aspect  == "urban_mining"):
+        #Built-up Index for mining - max options
+        urban_mining = cube.filter_bands(["B02", "B03", "B04", "B05", "B06", "B07","B08", "B8A", "B11", "B12"])
+        urban_mining = urban_mining.save_result(format="GTiff")
+        job = urban_mining.create_job(title = job_title)
         
     return (job)
     
@@ -157,3 +179,36 @@ def filter(lists, threshold=96.5):
   return (res)
   
 # -------------------------------------------------------------------------------------------------
+# Function to extract the RGB bands from a multi-band Sentinel-2 geotif that contains RGB and other bands
+def create_rgb_png(input_path, output_path):
+    try:
+        if not os.path.exists(input_path):
+            return
+    
+        with rasterio.open(input_path) as src:
+            # We need to read them in R-G-B order (B04, B03, B02)
+            red = src.read(3)
+            green = src.read(2)
+            blue = src.read(1)
+            
+            # Get metadata to ensure dimensions match later if needed
+            profile = src.profile
+    
+        # Stack the single bands into a 3D array (Height, Width, 3)
+        rgb_stack = numpy.dstack((red, green, blue))
+    
+        # Raw Sentinel-2 data is usually uint16 (0-65535) or similar. Standard PNGs need uint8 (0-255).
+        # Use a 2% and 98% percentile stretch to remove outliers and brighten the image
+        p2, p98 = numpy.percentile(rgb_stack, (2, 98))
+        
+        # Rescale intensity using scikit-image. Matplotlib wants floats 0-1 or ints 0-255
+        rgb_rescaled = exposure.rescale_intensity(rgb_stack, in_range=(p2, p98), out_range=(0, 1))
+    
+        # --- Saving --- Origin='upper' ensures the image isn't flipped vertically
+        plt.imsave(output_path, rgb_rescaled, origin='upper')
+        return (1)
+
+    except Exception as e:
+        return (0)
+
+ # -------------------------------------------------------------------------------------------------  
