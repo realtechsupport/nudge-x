@@ -7,7 +7,7 @@ import json
 import time
 from typing import List, Tuple
 from mllm_code.prompts import system_prompt, questions
-from mllm_code.mllm_helper import LlamaPromptGenerator, LlamaCaptionGenerator
+from mllm_code.mllm_helper import *
 from mllm_code.evaluation import CaptionEvaluator
 from mllm_code.database_pipeline.database_operations import create_table_if_not_exists, save_filename_and_captions
 
@@ -100,27 +100,28 @@ class Captions:
                     for question in self.questions:
                         print(f"Processing image: {basename}")
                         # Pass blob_name (string path) to LlamaPromptGenerator for metadata extraction
-                        prompt, location, _ = LlamaPromptGenerator(blob_name, question)
+                        prompt, location, basename, country, mine_name = LlamaPromptGenerator_mines(blob_name, question)
                         # Pass pil_image to LlamaCaptionGenerator for image processing
                         caption = LlamaCaptionGenerator(pil_image, system_prompt, prompt, model_name, invoke_url)
 
                         print("Caption generated: ", caption)
                         print("Evaluating caption...")
                         is_accepted = self.evaluation(caption)
-                        captions_with_metadata.append((basename, location, caption, is_accepted, True))
+                        captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True))
             # --- Local path flow --- #
             else:
                 for image_file in batch:
                     for question in self.questions:
                         print(f"Processing image: {image_file}")
-                        prompt, location, basename = LlamaPromptGenerator(image_file, question)
+                        prompt, location, basename, country, mine_name = LlamaPromptGenerator_mines(image_file, question)
                         caption = LlamaCaptionGenerator(image_file, system_prompt, prompt, model_name, invoke_url)
 
                         print("Caption generated: ", caption)
                         print("Evaluating caption...")
                         is_accepted = self.evaluation(caption)
-                        captions_with_metadata.append((basename, location, caption, is_accepted, True))
+                        captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True))
 
+            
             self._save_caption(captions_with_metadata)
 
     def _kosmos(self):
@@ -148,7 +149,6 @@ class Captions:
 
                         is_accepted = self.evaluation(caption)
                         captions_with_metadata.append((basename, location, caption, is_accepted, True))
-
             self._save_caption(captions_with_metadata)
 
     def evaluation(self, caption: str, max_retries: int = 3) -> bool:
@@ -196,4 +196,3 @@ class Captions:
                 # For other unexpected errors, don't retry
                 print(f"Unexpected evaluation error: {e}")
                 raise RuntimeError("Evaluation failed") from e
-
