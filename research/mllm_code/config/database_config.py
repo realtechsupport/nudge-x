@@ -14,6 +14,9 @@ POSTGRES_PORT = os.getenv("POSTGRES_PORT")
 # Image directory from environment variables
 IMAGE_DIR = os.getenv("IMAGE_DIR")
 
+IMAGE_COLLECTION_NAME =  "image_collection"
+IMAGE_EMBEDDING_MODEL_NAME =  "sentence-transformers/clip-ViT-B-32"
+
 # Qdrant configuration from environment variables
 QDRANT_HOST = os.getenv("QDRANT_HOST")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT"))
