@@ -5,6 +5,7 @@ import os
 import requests, base64
 import time
 import sys
+from pathlib import Path
 from mllm_code.prompts import system_prompt, multi_shot_examples
 from mllm_code.exception import mllmException
 from dotenv import load_dotenv
@@ -28,15 +29,15 @@ def compress_image(image_path_or_image, max_size=(512,512), quality=70):
     img.save(buffer, format="JPEG", quality=quality)
     return base64.b64encode(buffer.getvalue()).decode()
 
-def get_metadata_description(location_name: str) -> str:
-    """Return site description by fuzzy matching location."""
-    location_name = location_name.strip().lower()
-    for site, desc in zip(metadata_df['Mine name'], metadata_df['metadata']):
-        if location_name in site.lower():
-            print("Meta data found for this site\n")
-            return desc
-    print("No meta data found for this site\n")
-    return None
+def get_metadata_description(mine_name: str) -> str:
+    """Return site description by fuzzy matching mine name."""
+    mine_name = mine_name.strip().lower()
+    for mines, desc, country, location in zip(metadata_df['Mine name'], metadata_df['metadata'], metadata_df['Country'], metadata_df['Location']):
+        if mine_name in mines.lower():
+            print("Meta data found for this mine\n")
+            return country, location, desc
+    print("No meta data found for this mine\n")
+    return None, None, None
 
 #------------------------------------------------------------------------------------------------------------
 def time_it(func):
@@ -175,7 +176,46 @@ def LlamaPromptGenerator(image_file_path: str, question: str, multi_shot_example
         Now generate a caption consistent with the examples above.
         """.strip()
     return prompt, location, basename
+#------------------------------------------------------------------------------------------------------------
+def LlamaPromptGenerator_mines(image_file_path: str, question: str, multi_shot_examples: str = multi_shot_examples) -> tuple:
+    filename = Path(image_file_path).name
+    info = os.path.splitext(image_file_path)[0]
+    basename = info.split('/')[-1]
+    parts = basename.split("_")
+    mine_name = parts[0]
+    operation = parts[1]
+    date = parts[2]
+    image_type = f"{operation.upper()} result from the bands of a Sentinel-2 image"
+    country, location, site_description = get_metadata_description(mine_name)
 
+    site_description_text = f"Location Metadata:\n{site_description}" if site_description else ""
+
+    prompt =  f"""
+    You are analyzing a Sentinel-2 satellite image of a mine.
+    Mine Name: {mine_name}
+    Date: {date}
+    Image Type: {image_type}
+    Country: {country}
+    Location: {location}
+    {site_description_text}
+    Answer the following, strictly using the image above:
+    {question}
+    """.strip()
+
+    if multi_shot_examples:
+        prompt = f"""
+        {prompt.strip()}
+
+        Below are several example inputs and their captions. 
+        Use them as style references when generating your caption for the current image.
+
+        ---
+        {multi_shot_examples.strip()}
+        ---
+
+        Now generate a caption consistent with the examples above.
+        """.strip()
+    return prompt, location, filename, country, mine_name
 
 #------------------------------------------------------------------------------------------------------------
 def KosmosPromptGenerator(location, common_prompt, specific_prompt=""):
