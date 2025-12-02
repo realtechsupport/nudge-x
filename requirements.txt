@@ -1,4 +1,5 @@
 google-generativeai
+google-cloud-storage
 psycopg2-binary  
 Pillow           
 sentence-transformers 
