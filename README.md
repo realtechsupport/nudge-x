@@ -34,6 +34,20 @@ python3 -m mllm_code.main.captions_pipeline
 Windows: 
 python -m mllm_code.main.captions_pipeline 
 
+Use this command in terminal to check number of images in the nundge-bucket
+gsutil ls gs://nudge-bucket | grep -E '\.png$|\.jpg$|\.jpeg$' | wc -l
+ 
+Use below command to connect to database using Terminal  
+
+psql -h localhost -U Admin1 -d captions_db  
+Enter password: 
+The following commands helps to navigate throught the db  
+\dt - List tables in the current database (captions_db)
+\x -  For expanded display mode (Human redable print)
+\q	- Quit the psql session
+You can run SQL commands like (always use ; at end);
+
+
 
 UI:
 
