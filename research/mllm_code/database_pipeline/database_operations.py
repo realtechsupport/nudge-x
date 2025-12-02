@@ -1,4 +1,3 @@
-
 import psycopg2
 from psycopg2 import Error
 import os
@@ -34,7 +33,9 @@ def create_table_if_not_exists():
                 CREATE TABLE IF NOT EXISTS captions (
                     id SERIAL PRIMARY KEY,
                     filename VARCHAR(255) NOT NULL,
+                    mine_name VARCHAR(255),
                     location VARCHAR(255),
+                    country VARCHAR(255),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_accepted BOOLEAN DEFAULT FALSE,
                     is_evaluated BOOLEAN DEFAULT FALSE,
@@ -51,7 +52,25 @@ def create_table_if_not_exists():
                 );
             """)
 
-            
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS image_embeddings (
+                    id SERIAL PRIMARY KEY,
+                    filename VARCHAR(255) UNIQUE NOT NULL,
+                    embedding_added BOOLEAN DEFAULT FALSE,
+                    embedding_created_at TIMESTAMP
+                );
+            """)
+
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS frontend_captions (
+            id SERIAL PRIMARY KEY,
+            filename VARCHAR(255) NOT NULL,
+            site_location VARCHAR(255) NOT NULL,
+            country VARCHAR(255) NOT NULL,
+            GPS_coordinates VARCHAR(255) NOT NULL,
+            caption TEXT NOT NULL
+        );
+    """)    
             conn.commit()
             print("Tables checked/created successfully.")
         except Error as e:
@@ -62,14 +81,14 @@ def create_table_if_not_exists():
                 conn.close()
 
 
-def save_filename_and_captions(captions_with_metadata: List[Tuple[str, str, str, bool, bool]]):
+def save_filename_and_captions(captions_with_metadata: List[Tuple[str, str, str, str, str, bool, bool]]):
     """
     Saves multiple image metadata entries and their captions to the PostgreSQL database.
     Returns a list of IDs for the newly saved rows.
     
     Args:
         captions_with_metadata (list of tuples): Each tuple should be 
-        (filename, location, caption, is_accepted, is_evaluated)
+        (filename, mine_name, location, country, caption, is_accepted, is_evaluated)
     """
     conn = connect_db()
     if conn is None:
@@ -79,8 +98,8 @@ def save_filename_and_captions(captions_with_metadata: List[Tuple[str, str, str,
         cursor = conn.cursor()
 
         insert_sql = """
-            INSERT INTO captions (filename, location, caption, is_accepted, is_evaluated)
-            VALUES (%s, %s, %s, %s, %s);
+            INSERT INTO captions (filename, mine_name, location, country, caption, is_accepted, is_evaluated)
+            VALUES (%s, %s, %s, %s, %s, %s, %s);
         """
 
         # Execute batch insert
@@ -99,7 +118,76 @@ def save_filename_and_captions(captions_with_metadata: List[Tuple[str, str, str,
         conn.close()
 
 
+def fetch_images_without_embeddings(limit: int = 50):
+    """
+    Returns unique image filenames whose embeddings have not been added yet.
+    """
+    conn = connect_db()
+    if conn is None:
+        return []
 
+    try:
+        cursor = conn.cursor()
+        query = """
+            WITH latest_per_image AS (
+                SELECT DISTINCT ON (filename)
+                    filename,
+                    location,
+                    id AS caption_id,
+                    created_at
+                FROM captions
+                WHERE filename IS NOT NULL
+                  AND is_accepted = TRUE
+                ORDER BY filename, created_at DESC
+            )
+            SELECT l.filename, l.location, l.caption_id
+            FROM latest_per_image l
+            LEFT JOIN image_embeddings ie ON ie.filename = l.filename
+            WHERE ie.id IS NULL OR ie.embedding_added = FALSE
+            LIMIT %s;
+        """
+        cursor.execute(query, (limit,))
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    except Exception as e:
+        print(f"Error fetching images without embeddings: {e}")
+        return []
+    finally:
+        if conn:
+            cursor.close()
+            conn.close()
+
+
+def mark_image_embeddings_added(filenames: List[str]):
+    """
+    Marks embeddings as added for the provided image filenames.
+    """
+    if not filenames:
+        return
+
+    conn = connect_db()
+    if conn is None:
+        return
+
+    try:
+        cursor = conn.cursor()
+        insert_sql = """
+            INSERT INTO image_embeddings (filename, embedding_added, embedding_created_at)
+            VALUES (%s, TRUE, CURRENT_TIMESTAMP)
+            ON CONFLICT (filename)
+            DO UPDATE SET embedding_added = EXCLUDED.embedding_added,
+                          embedding_created_at = EXCLUDED.embedding_created_at;
+        """
+        cursor.executemany(insert_sql, [(filename,) for filename in filenames])
+        conn.commit()
+    except Exception as e:
+        print(f"Error marking image embeddings added: {e}")
+        conn.rollback()
+    finally:
+        if conn:
+            cursor.close()
+            conn.close()
 
 def fetch_captions_without_embeddings(limit: int = 50):
     """
