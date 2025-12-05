@@ -35,29 +35,36 @@ CONSTRAINTS:
 
 multi_shot_examples = """
 
-Question: Which environmental hazards are present in this Sentinel-2 satellite image?
-Answer: The primary hazard is a large, active wildfire within a forested area. A significant smoke plume is visible, drifting eastward and impacting regional air quality. A dark, charred burn scar is evident to the west of the active fire front, indicating the extent of the damage.
+Question: Which environmental hazards are present in this Sentinel-2 satellite image:Houcao Bauxite Deposit - Sentinel-2, October 29, 2024 (China)?
+Answer: The Sentinel-2 image of the Houcao Bauxite Deposit (October 29, 2024) shows an extensive open-pit operation in China. The reddish-brown exposed soil, characteristic of bauxite, indicates major land disturbance and potential soil erosion. A large tailings pond with unnaturally colored water suggests chemical contamination and risk of leakage into nearby water bodies and groundwater. Vegetation around the site is sparse and stressed, reflecting the environmental impact of bauxite mining
 
-Question: Which environmental hazards are present in this Sentinel-2 satellite image?
-Answer: A significant oil spill is present in the marine environment. A dark, irregular slick, characteristic of hydrocarbons, is visible on the ocean surface, contrasting with the surrounding water. The spill is spreading with the current, posing a direct threat to coastal ecosystems.
+Question: Which environmental hazards are present in this Sentinel-2 satellite image: Burnaga Mine - Sentinel-2, September 13, 2024 (Rwanda)?
+Answer: This Sentinel-2 image from September 13, 2024 shows the Burnaga Mine in Rwanda, where aluminum- and iron-manganese-rich phosphate pegmatite is extracted. Extensive exposed brown soil and bare rock indicate heavy mining activity with potential soil erosion and water pollution. A tailings pond with unusually colored water signals chemical contamination and risks to surrounding water sources.
 
-Question: Which environmental hazards are present in this Sentinel-2 satellite image?
-Answer: The image shows evidence of widespread deforestation. Large, well-defined patches of dense forest have been clear-cut, leaving exposed brown soil. The pattern suggests industrial or illegal logging, contributing to habitat destruction and soil erosion.
+Question: Which environmental hazards are present in this Sentinel-2 satellite image: Crowsnest Pass mines - Sentinel-2, October 12, 2024 (Canada)?
+Answer: The October 12, 2024 Sentinel-2 image captures the Crowsnest Pass mines in Canada, known for rare phosphate and silicate extraction. Large areas of deforestation, likely linked to a legacy of coal mining, expose bare soil and suggest soil erosion and habitat loss. Although no oil spills, wildfires, or algal blooms are visible, the image indicates increased sedimentation and groundwater contamination risk from ongoing mining activities.
 
-Question: Which environmental hazards are present in this Sentinel-2 satellite image?
-Answer: A widespread harmful algal bloom (HAB) is visible on the surface of this lake. The high concentration of algae appears as bright green and cyan swirls, indicating eutrophication. This condition depletes oxygen in the water and can be toxic to aquatic life.
+Question: Which environmental hazards are present in this Sentinel-2 satellite image: Kolwezi Mine - Sentinel-2, October 11, 2024 (DRC)?
+Answer: Captured on October 11, 2024, the Sentinel-2 image shows the Kolwezi Mine in the DRC, an old copper mine operating since 1903. A large open pit and adjacent tailings pond with unnaturally colored water indicate potential chemical contamination and risk of leakage into nearby water bodies. The surrounding area is largely devoid of vegetation and shows severe land degradation.
 
-Question: Which environmental hazards are present in this Sentinel-2 satellite image?
-Answer: Extensive flooding is the main hazard. A river has overflowed its banks, submerging vast areas of surrounding agricultural land and settlements. The floodwaters are heavily laden with sediment, appearing as turbid, brown water that obscures the normal landscape.
+Question: Which environmental hazards are present in this Sentinel-2 satellite image: Tsumeb Mine - Sentinel-2, December 16, 2024 (Namibia)?
+Answer: The December 16, 2024 Sentinel-2 image depicts the Tsumeb Mine in Namibia, one of the world's richest polymetallic sites, producing copper, silver, and gold from depths of over 1,000 meters. Extensive open-cast excavation and soil removal have caused significant land degradation. A large tailings pond with unusually colored water highlights potential chemical contamination.
 
-Question: Which environmental hazards are present in this Sentinel-2 satellite image?
-Answer: The image reveals severe drought conditions. A major reservoir shows a significantly receded shoreline, exposing a large "bathtub ring" of dry earth. Surrounding vegetation appears stressed and less dense, indicating a critical lack of water impacting both the ecosystem and water supplies.
+Question: Which environmental hazards are present in this Sentinel-2 satellite image: Red Lake mines - Sentinel-2, November 9, 2024 (Canada)?
+Answer: This Sentinel-2 image from November 9, 2024 shows the Red Lake mines in Balmertown, Ontario, on the traditional lands of the Wabauskang and Lac Seul First Nations. Known for high-grade gold deposits, the site is under restoration. Nonetheless, a large tailings pond with unnaturally colored water signals ongoing environmental risk, with potential leakage into nearby water bodies and groundwater.
 
-Question: Which environmental hazards are present in this Sentinel-2 satellite image?
-Answer: A potential mining-related hazard is visible. Adjacent to an open-pit mine is a large tailings pond containing unnaturally colored water, which suggests chemical contamination. This poses a risk of leakage that could pollute nearby rivers and groundwater.
+Question: Which environmental hazards are present in this Sentinel-2 satellite image: Kings Mountain Mine - Sentinel-2, December 8, 2024 (USA)?
+Answer: Captured on December 8, 2024, this Sentinel-2 image shows the open-pit Kings Mountain Mine in Cleveland County, North Carolina, one of the largest bedrock lithium deposits in the U.S. Significant land alteration suggests soil erosion and habitat loss. Although no direct evidence of water or air pollution
 
-Question: Which environmental hazards are present in this Sentinel-2 satellite image?
-Answer: A thick layer of smog and haze hangs over a major urban center. The atmospheric pollution obscures ground details and appears as a grayish-brown cloud, indicating poor air quality that presents a health hazard to the city's population.
+Question: Which environmental hazards are present in this Sentinel-2 satellite image: Foote Lithium Mine - Sentinel-2, November 12, 2024 (USA)?
+Answer: The November 12, 2024 Sentinel-2 image depicts the Foote Lithium Mine in North Carolina, operated by Albemarle Corporation. A large adjacent tailings pond with unnaturally colored water suggests chemical contamination. Extensive excavation is evident, likely causing land degradation and soil erosion. Although no oil spills are visible, the mine and tailings pond clearly indicate substantial environmental risks.
+
+Question: Which environmental hazards are present in this Sentinel-2 satellite image: Quebrada Blanca mine - Sentinel-2, December 28, 2024 (Chile)?
+Answer: This Sentinel-2 image from December 28, 2024 shows the Quebrada Blanca mine in Tamarugal Province, Chile. A large tailings pond with unusually colored water signals potential chemical contamination. The image reveals widespread land degradation, with large areas of bare soil and disturbed terrain. Vegetation appears stressed or cleared, indicating habitat destruction from mining.
+
+Question: Which environmental hazards are present in this Sentinel-2 satellite image: Fimiston Open Pit - Sentinel-2, December 25, 2024 (Australia)?
+Answer: The December 25, 2024 Sentinel-2 image captures the Fimiston Open Pit, Australia's largest open-cut gold mine. A large tailings pond adjacent to the mine contains water with an abnormal color, suggesting chemical contamination. Although the image does not directly show water quality or soil contamination, the tailings pond represents a potential environmental hazard to nearby communities.
+
 """
 
 #KOSMOS PROMPT

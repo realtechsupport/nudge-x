@@ -39,6 +39,7 @@ def create_table_if_not_exists():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_accepted BOOLEAN DEFAULT FALSE,
                     is_evaluated BOOLEAN DEFAULT FALSE,
+                    question TEXT,
                     caption TEXT
                 );
             """)
@@ -65,6 +66,7 @@ def create_table_if_not_exists():
             CREATE TABLE IF NOT EXISTS frontend_captions (
             id SERIAL PRIMARY KEY,
             filename VARCHAR(255) NOT NULL,
+            mine_name VARCHAR(255) NOT NULL,
             site_location VARCHAR(255) NOT NULL,
             country VARCHAR(255) NOT NULL,
             GPS_coordinates VARCHAR(255) NOT NULL,
@@ -81,14 +83,14 @@ def create_table_if_not_exists():
                 conn.close()
 
 
-def save_filename_and_captions(captions_with_metadata: List[Tuple[str, str, str, str, str, bool, bool]]):
+def save_filename_and_captions(captions_with_metadata: List[Tuple[str, str, str, str, str, bool, bool, str]]):
     """
     Saves multiple image metadata entries and their captions to the PostgreSQL database.
     Returns a list of IDs for the newly saved rows.
     
     Args:
         captions_with_metadata (list of tuples): Each tuple should be 
-        (filename, mine_name, location, country, caption, is_accepted, is_evaluated)
+        (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question)
     """
     conn = connect_db()
     if conn is None:
@@ -98,8 +100,8 @@ def save_filename_and_captions(captions_with_metadata: List[Tuple[str, str, str,
         cursor = conn.cursor()
 
         insert_sql = """
-            INSERT INTO captions (filename, mine_name, location, country, caption, is_accepted, is_evaluated)
-            VALUES (%s, %s, %s, %s, %s, %s, %s);
+            INSERT INTO captions (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
         """
 
         # Execute batch insert

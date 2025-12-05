@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Script to copy rows from captions table to frontend_captions table.
-Joins with METADATA_CSV to get country and GPS coordinates.
+Uses METADATA_CSV only to get GPS coordinates (matched by mine_name).
+All other fields (filename, mine_name, site_location, country, caption) are copied directly from captions table.
 """
 
 import os
@@ -12,22 +13,42 @@ from mllm_code.config.database_config import POSTGRES_DB
 
 load_dotenv()
 
-def get_metadata_mapping():
-    """Load metadata CSV and create a mapping from mine name to metadata."""
+def get_gps_mapping():
+    """Load metadata CSV and create a mapping from mine name to GPS coordinates."""
     metadata_csv = os.getenv('METADATA_CSV')
     if not metadata_csv:
         raise ValueError("METADATA_CSV environment variable not set")
     
     df = pd.read_csv(metadata_csv)
     
-    # Create mapping: mine name -> {country, latitude, longitude}
-    # Note: CSV has ' Mine name' with leading space
+    # Create mapping: mine name -> gps_coordinates
     mapping = {}
     for _, row in df.iterrows():
-        mine_name = str(row[' Mine name']).strip()
-        country = str(row['Country']).strip() if pd.notna(row['Country']) else 'Unknown'
-        latitude = row['Latitude'] if pd.notna(row['Latitude']) else None
-        longitude = row['Longitude'] if pd.notna(row['Longitude']) else None
+        mine_name = str(row['Mine name']).strip()
+        
+        # Try to get coordinates - handle multiple data entry formats
+        latitude = None
+        longitude = None
+        
+        # First, try the separate Latitude/Longitude columns
+        if pd.notna(row['Latitude']) and pd.notna(row['Longitude']):
+            latitude = row['Latitude']
+            longitude = row['Longitude']
+        # If not available, try to parse the combined Lat/Long column
+        elif pd.notna(row.get('Lat/Long')) and str(row['Lat/Long']).strip():
+            lat_long_str = str(row['Lat/Long']).strip()
+            # Remove any surrounding quotes
+            lat_long_str = lat_long_str.strip('"\'')
+            # Parse combined format like "-32.443459, 151.014824" or "-32.443459,151.014824"
+            if ',' in lat_long_str:
+                parts = lat_long_str.split(',')
+                if len(parts) == 2:
+                    try:
+                        latitude = float(parts[0].strip())
+                        longitude = float(parts[1].strip())
+                    except ValueError:
+                        # If parsing fails, coordinates remain None
+                        pass
         
         # Create GPS coordinates string
         if latitude is not None and longitude is not None:
@@ -35,10 +56,7 @@ def get_metadata_mapping():
         else:
             gps_coords = "Unknown"
         
-        mapping[mine_name] = {
-            'country': country,
-            'gps_coordinates': gps_coords
-        }
+        mapping[mine_name] = gps_coords
     
     return mapping
 
@@ -59,24 +77,24 @@ def copy_captions_to_frontend(only_accepted=True):
         return
     
     try:
-        # Load metadata mapping
-        print("Loading metadata CSV...")
-        metadata_mapping = get_metadata_mapping()
-        print(f"Loaded metadata for {len(metadata_mapping)} mines")
+        # Load GPS coordinates mapping from metadata CSV
+        print("Loading metadata CSV for GPS coordinates...")
+        gps_mapping = get_gps_mapping()
+        print(f"Loaded GPS coordinates for {len(gps_mapping)} mines")
         
         cursor = conn.cursor()
         
-        # Fetch captions to copy
+        # Fetch captions to copy (all fields from captions table)
         if only_accepted:
             query = """
-                SELECT filename, location, caption
+                SELECT filename, mine_name, location, country, caption
                 FROM captions
                 WHERE is_accepted = TRUE
                 ORDER BY created_at DESC
             """
         else:
             query = """
-                SELECT filename, location, caption
+                SELECT filename, mine_name, location, country, caption
                 FROM captions
                 ORDER BY created_at DESC
             """
@@ -90,50 +108,34 @@ def copy_captions_to_frontend(only_accepted=True):
         
         # Prepare insert query
         insert_query = """
-            INSERT INTO frontend_captions (filename, site_location, country, GPS_coordinates, caption)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO frontend_captions (filename, mine_name, site_location, country, GPS_coordinates, caption)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """
         
         inserted_count = 0
         skipped_count = 0
-        missing_metadata_count = 0
+        missing_gps_count = 0
         
-        for filename, location, caption in captions:
-            # Match location with metadata
-            location_clean = str(location).strip() if location else None
+        for filename, mine_name, location, country, caption in captions:
+            mine_name_clean = str(mine_name).strip() if mine_name else 'Unknown'
+            location_clean = str(location).strip() if location else 'Unknown'
+            country_clean = str(country).strip() if country else 'Unknown'
             
-            if not location_clean:
-                print(f"Warning: Skipping {filename} - no location")
-                skipped_count += 1
-                continue
-            
-            # Try to find metadata - check exact match and partial matches
-            metadata = None
-            if location_clean in metadata_mapping:
-                metadata = metadata_mapping[location_clean]
+            # Look up GPS coordinates using mine_name (exact match, then case-insensitive)
+            gps_coordinates = None
+            if mine_name_clean in gps_mapping:
+                gps_coordinates = gps_mapping[mine_name_clean]
             else:
-                # Try case-insensitive match
-                for mine_name, meta in metadata_mapping.items():
-                    if mine_name.lower() == location_clean.lower():
-                        metadata = meta
+                # Try case-insensitive match 
+                for csv_mine_name, gps in gps_mapping.items():
+                    if csv_mine_name.lower() == mine_name_clean.lower():
+                        gps_coordinates = gps
                         break
-                
-                # Try partial match (location contains mine name or vice versa)
-                if not metadata:
-                    for mine_name, meta in metadata_mapping.items():
-                        if location_clean.lower() in mine_name.lower() or mine_name.lower() in location_clean.lower():
-                            metadata = meta
-                            break
             
-            if metadata:
-                country = metadata['country']
-                gps_coordinates = metadata['gps_coordinates']
-            else:
-                # Use defaults if metadata not found
-                print(f"Warning: No metadata found for location '{location_clean}' (filename: {filename})")
-                country = 'Unknown'
+            if gps_coordinates is None:
+                print(f"Warning: No GPS coordinates found for mine '{mine_name_clean}' (filename: {filename})")
                 gps_coordinates = 'Unknown'
-                missing_metadata_count += 1
+                missing_gps_count += 1 
             
             # Check if already exists
             cursor.execute(check_query, (filename,))
@@ -146,7 +148,7 @@ def copy_captions_to_frontend(only_accepted=True):
             
             # Insert into frontend_captions
             try:
-                cursor.execute(insert_query, (filename, location_clean, country, gps_coordinates, caption))
+                cursor.execute(insert_query, (filename, mine_name_clean, location_clean, country_clean, gps_coordinates, caption))
                 inserted_count += 1
             except Exception as e:
                 print(f"Error inserting {filename}: {e}")
@@ -157,7 +159,7 @@ def copy_captions_to_frontend(only_accepted=True):
         print(f"\n✅ Copy completed!")
         print(f"   Inserted: {inserted_count}")
         print(f"   Skipped: {skipped_count}")
-        print(f"   Missing metadata: {missing_metadata_count}")
+        print(f"   Missing GPS coordinates: {missing_gps_count}")
         
         # Verify the copy
         cursor.execute("SELECT COUNT(*) FROM frontend_captions")

@@ -175,6 +175,7 @@ def LlamaPromptGenerator(image_file_path: str, question: str, multi_shot_example
 
         Now generate a caption consistent with the examples above.
         """.strip()
+        
     return prompt, location, basename
 #------------------------------------------------------------------------------------------------------------
 def LlamaPromptGenerator_mines(image_file_path: str, question: str, multi_shot_examples: str = multi_shot_examples) -> tuple:

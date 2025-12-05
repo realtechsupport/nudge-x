@@ -12,7 +12,7 @@ DB_PORT = 5432
 
 # Make dated filename
 today = datetime.today().strftime("%Y-%m-%d")
-OUTPUT_DIR = "research/data"
+OUTPUT_DIR = "data"
 OUTPUT_FILE = f"{OUTPUT_DIR}/frontend_captions_{today}.tsv"
 
 # Create output directory if it doesn't exist

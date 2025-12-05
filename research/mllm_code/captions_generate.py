@@ -67,7 +67,7 @@ class Captions:
             results = list(executor.map(self._load_image_from_gcs, blob_names))
         return results
 
-    def _save_caption(self, captions_with_metadata: List[Tuple[str, str, str, bool, bool]]):
+    def _save_caption(self, captions_with_metadata: List[Tuple[str, str, str, str, str, bool, bool, str]]):
         """Save a batch of captions with evaluation metadata to DB."""
         create_table_if_not_exists()
         save_filename_and_captions(captions_with_metadata)
@@ -107,7 +107,7 @@ class Captions:
                         print("Caption generated: ", caption)
                         print("Evaluating caption...")
                         is_accepted = self.evaluation(caption)
-                        captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True))
+                        captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True, question))
             # --- Local path flow --- #
             else:
                 for image_file in batch:
@@ -119,7 +119,7 @@ class Captions:
                         print("Caption generated: ", caption)
                         print("Evaluating caption...")
                         is_accepted = self.evaluation(caption)
-                        captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True))
+                        captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True, question))
 
             
             self._save_caption(captions_with_metadata)
@@ -140,7 +140,8 @@ class Captions:
                         caption = KosmosCaptionGenerator(pil_image, prompt, invoke_url)
 
                         is_accepted = self.evaluation(caption)
-                        captions_with_metadata.append((basename, location, caption, is_accepted, True))
+                        # Tuple: (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question)
+                        captions_with_metadata.append((basename, None, location, None, caption, is_accepted, True, question))
             else:
                 for image_file in batch:
                     for question in self.questions:
@@ -148,7 +149,8 @@ class Captions:
                         caption = KosmosCaptionGenerator(image_file, prompt, invoke_url)
 
                         is_accepted = self.evaluation(caption)
-                        captions_with_metadata.append((basename, location, caption, is_accepted, True))
+                        # Tuple: (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question)
+                        captions_with_metadata.append((basename, None, location, None, caption, is_accepted, True, question))
             self._save_caption(captions_with_metadata)
 
     def evaluation(self, caption: str, max_retries: int = 3) -> bool:
