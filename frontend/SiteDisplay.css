@@ -1,0 +1,80 @@
+/* SiteDisplay.css */
+
+body {
+  margin: 0;
+  background-color: black;
+  color: white;
+  font-family: 'Ubuntu', sans-serif;
+}
+
+.site-container {
+  min-height: 100vh;
+  background-color: black;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.site-title {
+  font-size: 2rem;
+  margin-bottom: 2rem;
+  font-weight: bold;
+}
+
+.site-image {
+  width: 100%;
+  max-width: 1000px;
+  height: auto;
+  object-fit: contain;
+  margin-bottom: 2rem;
+}
+
+.site-image-placeholder {
+  width: 100%;
+  max-width: 1000px;
+  height: 300px;
+  background-color: #444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ccc;
+  margin-bottom: 2rem;
+}
+
+
+
+.site-link {
+  color: #00aaff;
+  text-decoration: underline;
+  font-size: 1rem;
+}
+.typewriter-cursor {
+  display: inline-block;
+  width: 1ch;
+  animation: blink 0.6s steps(1) infinite;
+}
+
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  50.01%, 100% {
+    opacity: 0;
+  }
+}
+
+.site-caption {
+  font-size: 1.2rem;
+  line-height: 1.38;
+  width: 100%;
+  max-width: 1000px;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: justify;
+  line-height: 1.15;
+  font-family: 'Ubuntu', sans-serif;
+}

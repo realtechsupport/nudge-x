@@ -1,5 +1,3 @@
-// App.jsx
-// React + Three.js globe with monochrome continents and lightweight rendering.
 
 import React, { useRef, useEffect, useState } from "react";
 import {
@@ -14,206 +12,95 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { WireframeGeometry2 } from "three/examples/jsm/lines/WireframeGeometry2.js";
 import { Wireframe } from "three/examples/jsm/lines/Wireframe.js";
+import SiteDisplay from "./SiteDisplay.jsx";
 
-import { GcpRegion, getAssetUrl } from "./app_gcp_assets";
+import { GcpRegion } from "./app_gcp_assets";
+import {
+  fetchSitesFromTsv,
+  getColorForSeverity,
+  latLonToVector3,
+} from "./siteData.js";
 
-/* ---------------- STATIC SITE METADATA ---------------- */
-/* Keep captions hard-coded here; images are attached async from backend. */
-const baseSiteData = [
-  {
-    name: "AidyrlaGoldDeposit",
-    lat: 18.9582,
-    lon: 72.8321,
-    severity: 5,
-    captions: [
-      "The primary hazard is a large, active wildfire within a forested area...",
-    ],
-  },
-  {
-    name: "Amable Pit",
-    lat: -29.37833,
-    lon: -69.94583,
-    severity: 5,
-    captions: [
-      "The primary hazard is a large, active wildfire within a forested area...",
-    ],
-  },
-  {
-    name: "Argyle Diamond Mine",
-    lat: -16.71639,
-    lon: 128.38889,
-    severity: 4,
-    captions: [
-      "A significant oil spill is present in the marine environment.",
-    ],
-  },
-  {
-    name: "Avon North Open Pit",
-    lat: -32.11833,
-    lon: 151.97861,
-    severity: 3,
-    captions: ["This satellite image shows Avon North Open Pit."],
-  },
-  {
-    name: "Bengalla Open-Cut Mine",
-    lat: -32.26953,
-    lon: 150.84403,
-    severity: 2,
-    captions: ["This satellite image shows Bengalla Open-Cut Mine."],
-  },
-];
 
-/* ----------------- Utility: severity color ----------------- */
-const getColorForSeverity = (severity) => {
-  // Map severity to color (hex). You can refine this mapping later.
-  switch (severity) {
-    case 5:
-      return 0xff0000;
-    case 4:
-      return 0xff4500;
-    case 3:
-      return 0xffa500;
-    case 2:
-      return 0xffff00;
-    case 1:
-    default:
-      return 0x00ff00;
-  }
-};
-
-/* -------------------- MAIN GLOBE COMPONENT -------------------- */
 function Globe() {
   const mountRef = useRef(null);
   const navigate = useNavigate();
 
-  // siteData holds the base static site metadata + image url when available.
-  const [siteData, setSiteData] = useState(baseSiteData);
-  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const [siteData, setSiteData] = useState([]);
+  const [sitesLoading, setSitesLoading] = useState(true);
+  const [sitesError, setSitesError] = useState(null);
 
-  // Refs to hold Three objects that survive re-renders:
   const rendererRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
   const controlsRef = useRef(null);
-  const clickableObjectsRef = useRef([]); // array of Meshes for raycasting
+  const clickableObjectsRef = useRef([]);
   const animationFrameRef = useRef(null);
 
-  /* ----------------- Async: fetch GCS images (first 5) ----------------- */
   useEffect(() => {
     let aborted = false;
 
-    async function loadImagesFromBackend() {
+    async function loadSites() {
       try {
-        const res = await fetch("http://35.208.244.178:8000/images", {
-          cache: "no-cache",
-        });
-        if (!res.ok) {
-          console.error("Images endpoint failed:", res.status, await res.text());
-          return;
-        }
-        const images = await res.json();
-        console.log("backend images:", images);
-
-        // Build a map from filename (lowercase) => url
-        const nameToUrl = {};
-        images.forEach((it) => {
-          if (it && it.name && it.url) {
-            nameToUrl[it.name.toLowerCase()] = it.url;
-            // also map without extensions for loose matching
-            const simple = it.name.replace(/\.\w+$/, "").toLowerCase();
-            nameToUrl[simple] = it.url;
-          }
-        });
-
-        // try to match site by name tokens (loose)
-        const mapped = baseSiteData.map((site) => {
-          const key1 = site.name.replace(/\s+/g, "").toLowerCase(); // "AmablePit" -> amablepit
-          const key2 = site.name.toLowerCase(); // "amable pit"
-          // find by exact filename, by simplified name, or fallback to first available image
-          const url =
-            nameToUrl[`${site.name.toLowerCase()}.png`] ||
-            nameToUrl[`${site.name.toLowerCase()}.jpg`] ||
-            nameToUrl[key1] ||
-            nameToUrl[key2] ||
-            (images[0] && images[0].url) ||
-            null;
-          return { ...site, image: url };
-        });
-
+        setSitesLoading(true);
+        setSitesError(null);
+        const sites = await fetchSitesFromTsv();
         if (!aborted) {
-          setSiteData(mapped);
-          setImagesLoaded(true);
+          setSiteData(sites);
         }
       } catch (err) {
-        console.error("Failed to fetch images from backend:", err);
+        console.error("Failed to load TSV site data:", err);
+        if (!aborted) {
+          setSitesError(err.message || String(err));
+        }
+      } finally {
+        if (!aborted) {
+          setSitesLoading(false);
+        }
       }
     }
 
-    loadImagesFromBackend();
+    loadSites();
     return () => {
       aborted = true;
     };
   }, []);
 
-  /* ----------------- Update dots' userData when imagesLoaded or siteData change ----------------- */
-  useEffect(() => {
-    if (!imagesLoaded) return;
-    const dots = clickableObjectsRef.current;
-    if (!dots || dots.length === 0) return;
-
-    dots.forEach((dot) => {
-      const match = siteData.find((s) => s.name === dot.userData.name);
-      if (match) {
-        dot.userData = match;
-      }
-    });
-  }, [imagesLoaded, siteData]);
-
-  /* ----------------- THREE scene initialization (run ONCE) ----------------- */
   useEffect(() => {
     if (!mountRef.current) return;
+    if (!siteData || siteData.length === 0) return;
+    if (rendererRef.current) return;
 
-    const width = mountRef.current.clientWidth;
-    const height = mountRef.current.clientHeight;
+    const width = mountRef.current.clientWidth || window.innerWidth;
+    const height = mountRef.current.clientHeight || window.innerHeight;
 
-    // Scene
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111);
+    scene.background = new THREE.Color(0x000000);
     sceneRef.current = scene;
 
-    // Camera (slightly narrower FOV, closer z)
     const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
     camera.position.z = 4;
     cameraRef.current = camera;
 
-    // Renderer (clamp pixel ratio for perf)
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.setSize(width, height);
     rendererRef.current = renderer;
     mountRef.current.appendChild(renderer.domElement);
 
-    // Globe geometry (lower segments → fewer triangles)
     const globeRadius = 2;
     const globeSegments = 32;
-    const globeGeometry = new THREE.SphereGeometry(
-      globeRadius,
-      globeSegments,
-      globeSegments
-    );
+    const globeGeometry = new THREE.SphereGeometry(globeRadius, globeSegments, globeSegments);
 
-    // Start with plain white globe; continents texture will be monochrome
     const solidGlobe = new THREE.Mesh(
       globeGeometry,
       new THREE.MeshBasicMaterial({ color: 0xffffff })
     );
     scene.add(solidGlobe);
 
-    // Monochrome continents texture: place `earth-continents-black.png`
-    // into Vite's `public/` folder so it's served at `/earth-continents-black.png`.
     const loader = new THREE.TextureLoader();
     loader.load(
-      "/earth-continents-black.png",
+      "/BlankMap-World-Equirectangular_v3.png",
       (texture) => {
         solidGlobe.material.map = texture;
         solidGlobe.material.needsUpdate = true;
@@ -224,7 +111,6 @@ function Globe() {
       }
     );
 
-    // Wireframe (thin, darker lines)
     const wireMaterial = new LineMaterial({
       color: 0x444444,
       linewidth: 0.0015,
@@ -239,31 +125,24 @@ function Globe() {
     );
     scene.add(wire);
 
-    // OrbitControls (with damping)
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controlsRef.current = controls;
 
-    // ---- Add Site Dots (from baseSiteData so globe appears immediately) ----
     const dotGroup = new THREE.Group();
     const clickableObjects = [];
-    const dotGeometry = new THREE.SphereGeometry(0.025, 8, 8); // fewer segments, smaller radius
+    const dotGeometry = new THREE.SphereGeometry(0.025, 8, 8);
 
-    baseSiteData.forEach((site) => {
-      const lat = (Math.PI / 180) * site.lat;
-      const lon = -(Math.PI / 180) * site.lon;
-
-      const x = globeRadius * Math.cos(lat) * Math.cos(lon);
-      const y = globeRadius * Math.sin(lat);
-      const z = globeRadius * Math.cos(lat) * Math.sin(lon);
+    siteData.forEach((site) => {
+      const pos = latLonToVector3(site.lat, site.lon, globeRadius);
 
       const mat = new THREE.MeshBasicMaterial({
         color: getColorForSeverity(site.severity),
       });
       const dot = new THREE.Mesh(dotGeometry, mat);
 
-      dot.position.set(x, y, z);
-      dot.userData = site; // will be replaced/extended later when imagesLoaded
+      dot.position.copy(pos);
+      dot.userData = site;
       dot.lookAt(0, 0, 0);
 
       dotGroup.add(dot);
@@ -273,7 +152,6 @@ function Globe() {
     clickableObjectsRef.current = clickableObjects;
     scene.add(dotGroup);
 
-    // Raycaster for clicks
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
@@ -283,10 +161,7 @@ function Globe() {
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObjects(
-        clickableObjectsRef.current,
-        true
-      );
+      const intersects = raycaster.intersectObjects(clickableObjectsRef.current, true);
       if (intersects.length > 0) {
         const selected = intersects[0].object.userData;
         console.log("Clicked site:", selected);
@@ -298,11 +173,10 @@ function Globe() {
 
     renderer.domElement.addEventListener("click", onCanvasClick);
 
-    // Resize handling
     const onWindowResize = () => {
       if (!mountRef.current) return;
-      const w = mountRef.current.clientWidth;
-      const h = mountRef.current.clientHeight;
+      const w = mountRef.current.clientWidth || window.innerWidth;
+      const h = mountRef.current.clientHeight || window.innerHeight;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -315,24 +189,22 @@ function Globe() {
     };
     window.addEventListener("resize", onWindowResize);
 
-    // Animation loop (slow rotation, lightweight rendering)
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
-      solidGlobe.rotation.y += 0.0008;
-      wire.rotation.y += 0.0008;
-      dotGroup.rotation.y += 0.0006;
+      const rotationSpeed = 0.0005;
+      solidGlobe.rotation.y += rotationSpeed;
+      wire.rotation.y = solidGlobe.rotation.y;
+      dotGroup.rotation.y = solidGlobe.rotation.y;
       controls.update();
       renderer.render(scene, camera);
     };
     animate();
 
-    // Cleanup when component unmounts
     return () => {
       cancelAnimationFrame(animationFrameRef.current);
       renderer.domElement.removeEventListener("click", onCanvasClick);
       window.removeEventListener("resize", onWindowResize);
       controls.dispose();
-      // Dispose geometries and materials
       scene.traverse((obj) => {
         if (obj.geometry) obj.geometry.dispose();
         if (obj.material) {
@@ -353,92 +225,26 @@ function Globe() {
       }
       rendererRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once
+  }, [siteData, navigate]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-6">
-      <div
-        ref={mountRef}
-        style={{
-          width: "100%",
-          maxWidth: 1550,
-          aspectRatio: "16/9",
-          background: "#1f2937",
-          borderRadius: 12,
-        }}
-      />
-
-      {!imagesLoaded ? (
-        <div className="text-gray-400 mt-3">
-          Loading site images from GCS (non-blocking)...
-        </div>
-      ) : (
-        <div className="text-gray-400 mt-3"></div>
-      )}
+    <div className="globe-wrapper">
+      <div ref={mountRef} className="globe-canvas" />
+      {sitesLoading && <div className="status-text">Loading site data from TSV...</div>}
+      {!sitesLoading && sitesError && <div className="status-text error">Failed to load site data: {sitesError}</div>}
     </div>
   );
 }
 
-/* -------------------- SITE DETAIL PAGE -------------------- */
-function SiteDetail() {
-  const { state } = useLocation();
-
-  // Example of where you might use getAssetUrl or GcpRegion in the SiteDetail component
-  const exampleAsset = getAssetUrl("site-logo.png");
-  console.log("Example asset URL generated using utility:", exampleAsset);
-
-  if (!state) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
-        <div className="text-center">
-          <h2 className="text-2xl mb-4">Invalid site</h2>
-          <a href="/" className="text-blue-400 underline">
-            ← Back to Globe
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  const site = state;
-  console.log("SiteDetail state:", site);
-  console.log("Image src being used:", site.image);
-
-  return (
-    <div className="flex flex-col items-center bg-gray-900 text-white min-h-screen p-8">
-      <h2 className="text-3xl mb-4">
-        {site.name} (Region: {GcpRegion})
-      </h2>
-      {site.image ? (
-        <img
-          src={site.image}
-          alt={site.name}
-          className="max-w-lg rounded-xl mb-6 shadow-lg"
-        />
-      ) : (
-        <div className="w-full max-w-lg h-64 bg-gray-700 rounded-xl flex items-center justify-center mb-6">
-          <span className="text-gray-300">No image available</span>
-        </div>
-      )}
-      <p className="text-gray-300 max-w-2xl">
-        {site.captions && site.captions[0]}
-      </p>
-      <a href="/" className="text-blue-400 underline mt-8">
-        ← Back to Globe
-      </a>
-    </div>
-  );
-}
-
-/* -------------------- APP -------------------- */
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Globe />} />
-        <Route path="/site/:name" element={<SiteDetail />} />
-      </Routes>
-    </Router>
+    <div className="w-full min-h-screen bg-black text-white">
+      <Router>
+        <Routes>
+          <Route path="/" element={<Globe />} />
+          <Route path="/site/:name" element={<SiteDisplay />} />
+        </Routes>
+      </Router>
+    </div>
   );
 }
