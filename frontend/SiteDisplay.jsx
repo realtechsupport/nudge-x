@@ -1,3 +1,4 @@
+// SiteDisplay.jsx
 import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import "./SiteDisplay.css";
@@ -6,42 +7,63 @@ function formatTitle(name) {
   return name.replace(/([A-Z])/g, " $1").trim();
 }
 
+// Typewriter that:
+//  - types "LLAMA++ says:\n\n"
+//  - pauses 2s (cursor blinking)
+//  - then types the caption
 function TypewriterText({ text, speed = 50 }) {
   const [displayedText, setDisplayedText] = useState("");
   const [showCursor, setShowCursor] = useState(true);
 
   useEffect(() => {
-    // Guard against non-string or empty input
     if (typeof text !== "string" || text.trim().length === 0) {
       setDisplayedText("");
       setShowCursor(false);
       return;
     }
 
-    let currentIndex = 0;
-    const chars = [...text];
+    const prefix = "LLAMA++ says:\n\n";
+    const full = prefix + text;
 
-    // Reset when the text prop changes
+    let currentIndex = 0;
+    let typingInterval = null;
+    let pauseTimeout = null;
+
     setDisplayedText("");
     setShowCursor(true);
 
-    const typingInterval = setInterval(() => {
-      if (currentIndex < chars.length) {
-        const nextChar = chars[currentIndex];
+    const clearTimers = () => {
+      if (typingInterval) clearInterval(typingInterval);
+      if (pauseTimeout) clearTimeout(pauseTimeout);
+    };
+
+    const startTyping = () => {
+      typingInterval = setInterval(() => {
+        if (currentIndex >= full.length) {
+          clearTimers();
+          pauseTimeout = setTimeout(() => setShowCursor(false), 2000);
+          return;
+        }
+
+        const nextChar = full[currentIndex];
         setDisplayedText((prev) => prev + nextChar);
         currentIndex += 1;
 
-        if (currentIndex === chars.length) {
-          clearInterval(typingInterval);
-          setTimeout(() => setShowCursor(false), 2000);
+        // After finishing the prefix line, pause for 2 seconds
+        if (currentIndex === prefix.length) {
+          clearTimers();
+          pauseTimeout = setTimeout(() => {
+            startTyping();
+          }, 2000);
         }
-      } else {
-        // Extra safety: never read past the end
-        clearInterval(typingInterval);
-      }
-    }, speed);
+      }, speed);
+    };
 
-    return () => clearInterval(typingInterval);
+    startTyping();
+
+    return () => {
+      clearTimers();
+    };
   }, [text, speed]);
 
   return (

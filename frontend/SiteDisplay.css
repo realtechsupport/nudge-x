@@ -18,10 +18,13 @@ body {
   text-align: center;
 }
 
+/* Title: Ubuntu light 300 italic */
 .site-title {
   font-size: 2rem;
   margin-bottom: 2rem;
-  font-weight: bold;
+  font-weight: 300;
+  font-style: italic;
+  font-family: 'Ubuntu', sans-serif;
 }
 
 .site-image {
@@ -44,13 +47,12 @@ body {
   margin-bottom: 2rem;
 }
 
-
-
 .site-link {
   color: #00aaff;
   text-decoration: underline;
   font-size: 1rem;
 }
+
 .typewriter-cursor {
   display: inline-block;
   width: 1ch;
@@ -66,9 +68,9 @@ body {
   }
 }
 
+/* Caption: Ubuntu light 300, preserve newlines */
 .site-caption {
   font-size: 1.2rem;
-  line-height: 1.38;
   width: 100%;
   max-width: 1000px;
   display: block;
@@ -77,4 +79,6 @@ body {
   text-align: justify;
   line-height: 1.15;
   font-family: 'Ubuntu', sans-serif;
+  font-weight: 300;
+  white-space: pre-line; /* keeps the LLAMA++ says: / blank line / caption lines */
 }
