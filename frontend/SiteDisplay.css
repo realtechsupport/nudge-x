@@ -1,38 +1,43 @@
 /* SiteDisplay.css */
 
+/* Off‑black background + Ubuntu Light 300 everywhere on the site page */
 body {
   margin: 0;
-  background-color: black;
+  background-color: rgb(35, 35, 35);
   color: white;
-  font-family: 'Ubuntu', sans-serif;
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 300;
 }
 
+/* Main container for the title, image, caption, globe icon */
 .site-container {
   min-height: 100vh;
-  background-color: black;
+  background-color: rgb(35, 35, 35);
   color: white;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 2rem 1rem;
+  justify-content: flex-start;
+  padding: 2rem 1rem 2rem; /* smaller bottom padding so everything fits */
   text-align: center;
 }
 
-/* Title: Ubuntu light 300 italic */
+/* Title: Ubuntu Light 300 italic */
 .site-title {
-  font-size: 2rem;
-  margin-bottom: 2rem;
+  font-size: 1.6rem;
+  margin-bottom: 1.5rem;
   font-weight: 300;
   font-style: italic;
-  font-family: 'Ubuntu', sans-serif;
 }
 
+/* Image: full width, but capped to a fraction of viewport height */
 .site-image {
   width: 100%;
   max-width: 1000px;
   height: auto;
+  max-height: 75vh;           /* <<< key: keep image from eating the screen */
   object-fit: contain;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .site-image-placeholder {
@@ -44,15 +49,38 @@ body {
   align-items: center;
   justify-content: center;
   color: #ccc;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
+/* Caption area: Ubuntu Light 300, scrollable if very long */
+.site-caption {
+  font-size: 1.1rem;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 0 1.5rem;
+  text-align: justify;
+  line-height: 1.25;
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 300;
+  white-space: pre-wrap;       /* keeps the “Llama4++ reports:\n\n” line breaks */
+  max-height: 30vh;            /* <<< reserves vertical room for globe icon */
+  overflow-y: auto;            /* long captions scroll inside this area */
+}
+
+/* Globe back link + icon */
 .site-link {
   color: #00aaff;
   text-decoration: underline;
   font-size: 1rem;
 }
 
+.globe-back-icon {
+  width: 50px;
+  height: auto;
+  margin-top: 0;               /* small gap (comes from caption margin-bottom) */
+}
+
+/* Typewriter cursor */
 .typewriter-cursor {
   display: inline-block;
   width: 1ch;
@@ -60,25 +88,12 @@ body {
 }
 
 @keyframes blink {
-  0%, 50% {
+  0%,
+  50% {
     opacity: 1;
   }
-  50.01%, 100% {
+  50.01%,
+  100% {
     opacity: 0;
   }
-}
-
-/* Caption: Ubuntu light 300, preserve newlines */
-.site-caption {
-  font-size: 1.2rem;
-  width: 100%;
-  max-width: 1000px;
-  display: block;
-  margin-left: auto;
-  margin-right: auto;
-  text-align: justify;
-  line-height: 1.15;
-  font-family: 'Ubuntu', sans-serif;
-  font-weight: 300;
-  white-space: pre-line; /* keeps the LLAMA++ says: / blank line / caption lines */
 }

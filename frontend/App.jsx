@@ -75,7 +75,7 @@ function Globe() {
     const height = mountRef.current.clientHeight || window.innerHeight;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000000);
+    scene.background = new THREE.Color(0x232323); // rgb(35,35,35)
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
@@ -88,7 +88,7 @@ function Globe() {
     rendererRef.current = renderer;
     mountRef.current.appendChild(renderer.domElement);
 
-    const globeRadius = 2;
+    const globeRadius = 1.5;
     const globeSegments = 32;
     const globeGeometry = new THREE.SphereGeometry(globeRadius, globeSegments, globeSegments);
 

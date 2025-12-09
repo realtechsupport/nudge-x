@@ -25,7 +25,7 @@ export const getColorForSeverity = (severity) => {
   }
 };
 
-// Very small TSV parser for `id, filename, site_location, country, gps_coordinates, caption`
+// Very small TSV parser for `id, filename, minename, site_location, country, gps_coordinates, caption`
 export function parseTsv(text) {
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length === 0) return [];
@@ -61,6 +61,7 @@ export function rowsToSites(rows) {
       return {
         id: row.id,
         name: row.site_location,
+		mine: row.mine_name,
         country: row.country,
         lat,
         lon,
