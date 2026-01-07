@@ -7,7 +7,18 @@ mllm_model = "LLAMA"
 # --- Sensitive Data ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# --- Model Configs ---
+# --- LLAMA Caption Generation Configs ---
+LLAMA_MODEL_NAME = "meta/llama-4-maverick-17b-128e-instruct"
+LLAMA_INVOKE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+LLAMA_TEMPERATURE = 0.7
+LLAMA_TOP_P = 1.00
+LLAMA_MAX_TOKENS = 512
+LLAMA_FREQUENCY_PENALTY = 0.5  # Penalizes repeated words (0.0-2.0, higher = less repetition)
+
+# --- Prompt Version (update when you change system_prompt in prompts.py) ---
+PROMPT_VERSION = "V4"
+
+# --- Evaluation Model Configs ---
 EVALUATION_MODEL_NAME = "gemini-2.5-flash"
 TEMPERATURE = 0.1
 TOP_P = 0.95
