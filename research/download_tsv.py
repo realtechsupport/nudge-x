@@ -13,7 +13,7 @@ DB_PORT = 5432
 # Make dated filename
 today = datetime.today().strftime("%Y-%m-%d")
 OUTPUT_DIR = "data"
-OUTPUT_FILE = f"{OUTPUT_DIR}/frontend_captions_{today}.tsv"
+OUTPUT_FILE = f"{OUTPUT_DIR}/captions_export_{today}.tsv"
 
 # Create output directory if it doesn't exist
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -30,7 +30,7 @@ try:
     cur = conn.cursor()
 
     print("Running SELECT query...")
-    cur.execute("SELECT * FROM frontend_captions")
+    cur.execute("SELECT * FROM frontend_captions_view")
 
     rows = cur.fetchall()
     headers = [desc[0] for desc in cur.description]
