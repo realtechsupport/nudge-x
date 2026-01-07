@@ -23,6 +23,7 @@ Windows:
 1. python -m venv my_venv
 2. my_venv\Scripts\activate
 3. pip install -r requirements.txt
+If killed while installing due to torch, use python -m pip install --index-url https://download.pytorch.org/whl/cpu torch  
 
 Always run any file inside research. 
 cd research 
