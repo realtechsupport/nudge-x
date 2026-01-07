@@ -27,9 +27,7 @@ user_questions_list = ["How do mining operations impact the environment?",
 "What negative effects does mining have on the environment ?", 
 "How do mining operations in the Canadian Rockies impact the environment?", 
 "How  do mining operations  in DR Congo impact the environment?", 
-"How  do mining operations in Germany impact the environment?",
-"How  do mining operations in RedLakeMine impact the environment?",
-"How  do mining operations in Cantabria impact the environment?",
+"How do mining operatons in Australia impact the environment? Elaborate on specific examples.",
 ]
 qdrant_mode = os.getenv("QDRANT_MODE", "production").lower()
 
