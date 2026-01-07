@@ -5,23 +5,36 @@ from PIL import Image
 import os
 import json
 import time
-from typing import List, Tuple
-from mllm_code.prompts import system_prompt, questions
+from typing import List, Tuple, Optional
+from mllm_code.prompts import system_prompt, questions, multi_shot_examples
 from mllm_code.mllm_helper import *
 from mllm_code.evaluation import CaptionEvaluator
-from mllm_code.database_pipeline.database_operations import create_table_if_not_exists, save_filename_and_captions
+from mllm_code.database_pipeline.database_operations import create_table_if_not_exists, save_filename_and_captions, create_pipeline_run
+from mllm_code.config.settings import (
+    LLAMA_MODEL_NAME, LLAMA_INVOKE_URL, LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
+    PROMPT_VERSION
+)
+
+# Determine number of shots from the multi_shot_examples
+def _count_shots(examples_str: str) -> int:
+    """Count the number of Question/Answer pairs in multi-shot examples."""
+    if not examples_str:
+        return 0
+    return examples_str.count("Question:")
 
 class Captions:
     """
     Class to generate captions, evaluate them, and save in batches.
-    Each saved tuple = (basename, location, caption, is_accepted, is_evaluated).
+    Each saved tuple = (basename, mine_name, location, country, caption, is_accepted, is_evaluated, question, latitude, longitude).
     """
 
-    def __init__(self, mllm_model: str, images_folder_path: str, questions: List[str], batch_size: int = 5):
+    def __init__(self, mllm_model: str, images_folder_path: str, questions: List[str], batch_size: int = 5, prompt_version: str = PROMPT_VERSION):
         self.mllm_model = mllm_model
         self.images_folder_path = images_folder_path
         self.questions = questions
         self.batch_size = batch_size
+        self.prompt_version = prompt_version
+        self.run_id: Optional[str] = None
 
         self._model_selector = {
             "LLAMA": self._llama,
@@ -67,10 +80,10 @@ class Captions:
             results = list(executor.map(self._load_image_from_gcs, blob_names))
         return results
 
-    def _save_caption(self, captions_with_metadata: List[Tuple[str, str, str, str, str, bool, bool, str]]):
+    def _save_caption(self, captions_with_metadata: List[Tuple[str, str, str, str, str, bool, bool, str, Optional[float], Optional[float]]]):
         """Save a batch of captions with evaluation metadata to DB."""
         create_table_if_not_exists()
-        save_filename_and_captions(captions_with_metadata)
+        save_filename_and_captions(captions_with_metadata, run_id=self.run_id)
 
     def _batch_iterator(self, iterable, batch_size):
         """Yield successive batches of size `batch_size` from iterable."""
@@ -81,13 +94,30 @@ class Captions:
         """Run the selected model."""
         if self.mllm_model not in self._model_selector:
             raise ValueError(f"Unsupported model: {self.mllm_model}")
+        
+        # Create pipeline run record before starting
+        create_table_if_not_exists()
+        num_shots = _count_shots(multi_shot_examples)
+        
+        self.run_id = create_pipeline_run(
+            prompt_version=self.prompt_version,
+            model_name=LLAMA_MODEL_NAME if self.mllm_model == "LLAMA" else "kosmos-2",
+            temperature=LLAMA_TEMPERATURE,
+            frequency_penalty=LLAMA_FREQUENCY_PENALTY,
+            top_p=LLAMA_TOP_P,
+            num_shots=num_shots
+        )
+        
+        if self.run_id:
+            print(f"✅ Pipeline run created with ID: {self.run_id}")
+        else:
+            print("⚠️ Warning: Could not create pipeline run record, continuing without run_id")
+        
         self._model_selector[self.mllm_model]()
 
     def _llama(self):
         """Run caption generation with LLaMA model in batches."""
         print("Running LLAMA -4\n")
-        model_name = 'meta/llama-4-maverick-17b-128e-instruct'
-        invoke_url = "https://integrate.api.nvidia.com/v1/chat/completions"
 
         for batch in self._batch_iterator(self.image_files, self.batch_size):
             print(f"\nProcessing batch of {len(batch)} images...\n")
@@ -100,26 +130,36 @@ class Captions:
                     for question in self.questions:
                         print(f"Processing image: {basename}")
                         # Pass blob_name (string path) to LlamaPromptGenerator for metadata extraction
-                        prompt, location, basename, country, mine_name = LlamaPromptGenerator_mines(blob_name, question)
+                        prompt, location, basename, country, mine_name, latitude, longitude = LlamaPromptGenerator_mines(blob_name, question)
                         # Pass pil_image to LlamaCaptionGenerator for image processing
-                        caption = LlamaCaptionGenerator(pil_image, system_prompt, prompt, model_name, invoke_url)
+                        caption = LlamaCaptionGenerator(
+                            pil_image, system_prompt, prompt,
+                            LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
+                            LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY
+                        )
 
                         print("Caption generated: ", caption)
                         print("Evaluating caption...")
                         is_accepted = self.evaluation(caption)
-                        captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True, question))
+                        # Tuple: (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question, latitude, longitude)
+                        captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True, question, latitude, longitude))
             # --- Local path flow --- #
             else:
                 for image_file in batch:
                     for question in self.questions:
                         print(f"Processing image: {image_file}")
-                        prompt, location, basename, country, mine_name = LlamaPromptGenerator_mines(image_file, question)
-                        caption = LlamaCaptionGenerator(image_file, system_prompt, prompt, model_name, invoke_url)
+                        prompt, location, basename, country, mine_name, latitude, longitude = LlamaPromptGenerator_mines(image_file, question)
+                        caption = LlamaCaptionGenerator(
+                            image_file, system_prompt, prompt,
+                            LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
+                            LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY
+                        )
 
                         print("Caption generated: ", caption)
                         print("Evaluating caption...")
                         is_accepted = self.evaluation(caption)
-                        captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True, question))
+                        # Tuple: (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question, latitude, longitude)
+                        captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True, question, latitude, longitude))
 
             
             self._save_caption(captions_with_metadata)
