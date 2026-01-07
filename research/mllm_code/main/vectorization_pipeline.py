@@ -87,16 +87,34 @@ def main():
     original_caption_ids = []
 
     for row in pending:
+        # Extract metadata fields
+        mine_name = row.get("mine_name") or ""
+        country = row.get("country") or ""
+        location = row.get("location") or ""
+        latitude = row.get("latitude")
+        longitude = row.get("longitude")
+        
+        # Build metadata prefix for semantic search (will be embedded with caption)
+        metadata_prefix = f"Mine: {mine_name}. Country: {country}. Location: {location}."
+        
         # 4. Split the caption into chunks
         chunks = text_splitter.split_text(row["caption"])
 
         for chunk in chunks:
+            # Combine metadata + chunk for embedding (enables semantic search on metadata)
+            enriched_chunk = f"{metadata_prefix} {chunk}"
+            
             chunked_docs.append({
                 "caption_id": row["id"],
                 "filename": row["filename"],
-                "location": row["location"],
-                "chunk": chunk,  # Store the chunk, not the full caption
-                "full_caption": row["caption"], # Store full caption for context
+                "mine_name": mine_name,
+                "country": country,
+                "location": location,
+                "latitude": latitude,
+                "longitude": longitude,
+                "chunk": enriched_chunk,  # Enriched chunk with metadata for embedding
+                "caption_chunk": chunk,   # Original chunk without metadata prefix
+                "full_caption": row["caption"],
                 "is_accepted": row["is_accepted"],
                 "is_evaluated": row["is_evaluated"],
                 "created_at": str(row["created_at"]) if row.get("created_at") else None,
@@ -116,7 +134,7 @@ def main():
     point_ids = add_captions_to_vector_db(client, collection_name, chunked_docs, model, vector_size)
 
     # Record embedding status back to DB using original caption IDs only
-    mark_embeddings_added(original_caption_ids)
+    mark_embeddings_added(original_caption_ids)=-09
 
     print(f"Embeddings created and stored for {len(point_ids)} chunks.")
 
