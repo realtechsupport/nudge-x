@@ -29,15 +29,48 @@ def compress_image(image_path_or_image, max_size=(512,512), quality=70):
     img.save(buffer, format="JPEG", quality=quality)
     return base64.b64encode(buffer.getvalue()).decode()
 
-def get_metadata_description(mine_name: str) -> str:
-    """Return site description by fuzzy matching mine name."""
+def get_metadata_description(mine_name: str) -> tuple:
+    """Return site description and GPS coordinates by fuzzy matching mine name.
+    
+    Returns:
+        tuple: (country, location, description, latitude, longitude)
+    """
     mine_name = mine_name.strip().lower()
-    for mines, desc, country, location in zip(metadata_df['Mine name'], metadata_df['metadata'], metadata_df['Country'], metadata_df['Location']):
-        if mine_name in mines.lower():
+    for idx, row in metadata_df.iterrows():
+        if mine_name in row['Mine name'].lower():
             print("Meta data found for this mine\n")
-            return country, location, desc
+            country = row['Country']
+            location = row['Location']
+            desc = row['metadata']
+            
+            # Get GPS coordinates - handle both separate and combined columns
+            latitude = None
+            longitude = None
+            
+            # First, try the separate Latitude/Longitude columns
+            if pd.notna(row.get('Latitude')) and pd.notna(row.get('Longitude')):
+                try:
+                    latitude = float(row['Latitude'])
+                    longitude = float(row['Longitude'])
+                except (ValueError, TypeError):
+                    pass
+            
+            # If not available, try to parse the combined Lat/Long column
+            if latitude is None and 'Lat/Long' in row and pd.notna(row.get('Lat/Long')):
+                lat_long_str = str(row['Lat/Long']).strip().strip('"\'')
+                if ',' in lat_long_str:
+                    parts = lat_long_str.split(',')
+                    if len(parts) == 2:
+                        try:
+                            latitude = float(parts[0].strip())
+                            longitude = float(parts[1].strip())
+                        except ValueError:
+                            pass
+            
+            return country, location, desc, latitude, longitude
+    
     print("No meta data found for this mine\n")
-    return None, None, None
+    return None, None, None, None, None
 
 #------------------------------------------------------------------------------------------------------------
 def time_it(func):
@@ -49,7 +82,16 @@ def time_it(func):
     return wrapper
 
 #------------------------------------------------------------------------------------------------------------
-def LlamaCaptionGenerator(image_file_path, SYSTEM_PROMPT, prompt, model_name, invoke_url):
+def LlamaCaptionGenerator(image_file_path, SYSTEM_PROMPT, prompt, model_name, invoke_url, temperature, top_p, max_tokens, frequency_penalty=0.0):
+    """
+    Generate caption using LLAMA model.
+    
+    Args:
+        temperature: Controls randomness. Lower = more deterministic, Higher = more creative (0.0-1.0)
+        top_p: Nucleus sampling parameter (0.0-1.0)
+        max_tokens: Maximum tokens in response
+        frequency_penalty: Penalizes repeated tokens (0.0-2.0, higher = less repetition)
+    """
     stream = False
     # HERE: Each of the input images (1-3) are from the same unique location and collected at the same time.
     # The first input image is RGB and the subsequent ones, where made available, are bandoperations (NDBI, NDVI, etc).
@@ -67,9 +109,10 @@ def LlamaCaptionGenerator(image_file_path, SYSTEM_PROMPT, prompt, model_name, in
             # Sai: enable 1, 2 or max 3 input images (for example RGB, NDBI, NDVI)
             # {"role": "user", "content": f""" {prompt} <img src="data:image/png;base64,{image_b64}" />"""}
         ],
-        "max_tokens": 512,
-        "temperature": 0.7,
-        "top_p": 1.00,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "top_p": top_p,
+        "frequency_penalty": frequency_penalty,
         "stream": stream
     }
     try:
@@ -179,6 +222,12 @@ def LlamaPromptGenerator(image_file_path: str, question: str, multi_shot_example
     return prompt, location, basename
 #------------------------------------------------------------------------------------------------------------
 def LlamaPromptGenerator_mines(image_file_path: str, question: str, multi_shot_examples: str = multi_shot_examples) -> tuple:
+    """
+    Generate prompt for LLaMA model with mine metadata.
+    
+    Returns:
+        tuple: (prompt, location, filename, country, mine_name, latitude, longitude)
+    """
     filename = Path(image_file_path).name
     info = os.path.splitext(image_file_path)[0]
     basename = info.split('/')[-1]
@@ -187,19 +236,32 @@ def LlamaPromptGenerator_mines(image_file_path: str, question: str, multi_shot_e
     operation = parts[1]
     date = parts[2]
     image_type = f"{operation.upper()} result from the bands of a Sentinel-2 image"
-    country, location, site_description = get_metadata_description(mine_name)
+    country, location, site_description, latitude, longitude = get_metadata_description(mine_name)
 
-    site_description_text = f"Location Metadata:\n{site_description}" if site_description else ""
+    # Build structured metadata section
+    if site_description:
+        metadata_section = f"""
+    === SITE METADATA (USE THIS INFORMATION IN YOUR RESPONSE) ===
+    {site_description}
+    === END METADATA ===
+    
+    IMPORTANT: Incorporate the above metadata into your analysis. Specifically mention:
+    - The minerals/resources extracted at this site
+    - How the mining operations relate to the environmental conditions you observe
+    """
+    else:
+        metadata_section = ""
 
-    prompt =  f"""
+    prompt = f"""
     You are analyzing a Sentinel-2 satellite image of a mine.
+    
     Mine Name: {mine_name}
     Date: {date}
     Image Type: {image_type}
     Country: {country}
     Location: {location}
-    {site_description_text}
-    Answer the following, strictly using the image above:
+    {metadata_section}
+    Using BOTH the image AND the metadata provided above, answer the following:
     {question}
     """.strip()
 
@@ -214,9 +276,9 @@ def LlamaPromptGenerator_mines(image_file_path: str, question: str, multi_shot_e
         {multi_shot_examples.strip()}
         ---
 
-        Now generate a caption consistent with the examples above.
+        Now generate a caption consistent with the examples above. Remember to mention the specific minerals being extracted.
         """.strip()
-    return prompt, location, filename, country, mine_name
+    return prompt, location, filename, country, mine_name, latitude, longitude
 
 #------------------------------------------------------------------------------------------------------------
 def KosmosPromptGenerator(location, common_prompt, specific_prompt=""):
