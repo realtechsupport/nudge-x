@@ -1,0 +1,7 @@
+cd /home/marcbohlen/globe
+npm run build
+
+sudo rm -rf /var/www/globe/*
+sudo cp -r dist/* /var/www/globe/
+sudo chown -R www-data:www-data /var/www/globe
+sudo nginx -t && sudo systemctl reload nginx
