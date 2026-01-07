@@ -139,35 +139,30 @@ When evaluating, consider if the caption:
 - Adheres to the specific terminology commensurate with an environmental analyst.
 
 EVALUATION CRITERIA (Rate each on a scale of 1-5, where 1 is the lowest and 5 the highest score, **always provide a numeric score**):
-* **1. Environmental Focus:**
+* **1. Environmental_Focus:**
     * 1: Primarily describes non-environmental objects or is entirely irrelevant.
-    * 3: Describes some environmental aspects but also includes generic observarions (e.g., "buildings," "roads") without environmental context, or is too vague.
-    * 5: Focuses exclusively on environmental conditions (land cover, water sources, vegetation health, pollution, degradation of the landscape through mining, clearcuting or idustrialization) and their significance.
-* **2. Accuracy & Plausibility (Self-Contained):**
-    * 1: Contains significant factual errors or clear textual hallucinations (describing things that are inconsistent within the caption itself).
-    * 3: Mostly plausible but with minor inaccuracies or vague statements.
-    * 5: Factually plausible, with no observable hallucinations or inconsistencies.
-* **3. Specificity & Terminology:**
+    * 3: Describes some environmental aspects but also includes generic observations (e.g., "buildings," "roads") without environmental context, or is too vague.
+    * 5: Focuses exclusively on environmental conditions (land cover, water sources, vegetation health, pollution, degradation of the landscape through mining, clearcutting or industrialization) and their significance.
+* **2. Specificity_Terminology:**
     * 1: Uses generic, vague language; lacks specific environmental or scientific terminology.
     * 3: Uses some environmental terminology but could be more specific or precise.
     * 5: Employs precise, specific environmental terminology (e.g., "riparian vegetation", "open pit mining", "urban heat island effect," "Normalized Difference Vegetation Index") where appropriate.
-* **4. Description of Processes and Patterns:**
+* **3. Processes_Patterns:**
     * 1: Only lists static objects; no mention of patterns, changes, or processes.
     * 3: Mentions some patterns or changes, but not central to the description or lacks depth.
     * 5: Effectively describes spatial patterns, and underlying environmental processes.
-* **5. Adherence to Constraints:**
+* **4. Adherence_to_Constraints:**
     * 1: Significantly violates constraints (e.g., focuses heavily on non-environmental objects without environmental impact, uses subjective terms like "beautiful" or "impressive").
     * 3: Minor violations of constraints.
     * 5: Fully adheres to all constraints (no basic objects without environmental impact, no subjective terms, factual language, under 200 words).
-* **6. Conciseness of Expression (1-5):**
+* **5. Conciseness:**
     * 1: Excessively verbose or too short to be informative.
     * 3: Reasonable length but could be more concise.
     * 5: Concise and impactful without unnecessary jargon, within word limit as per the requirement.
 
 INSTRUCTIONS:
-1.  First, provide step-by-step reasoning for your scores for each of the six criteria. Be specific, referencing parts of the caption where applicable.
-2.  Second, provide the final scores in a JSON object. **Ensure all scores are provided as numbers (e.g., 1, 3.5, 5.0).**
-3.  Then calculate the "Overall_Content_Score" as the average of the first five criteria (Environmental_Focus, Accuracy_Plausibility, Specificity_Terminology, Processes_Patterns_Changes, Adherence_to_Constraints). The "Conciseness" score is separate.
+1.  First, provide step-by-step reasoning for your scores for each of the five criteria. Be specific, referencing parts of the caption where applicable.
+2.  Second, provide the final scores in a JSON object with these exact keys: Environmental_Focus, Specificity_Terminology, Processes_Patterns, Adherence_to_Constraints, Conciseness, Reasoning. **Ensure all scores are provided as numbers (e.g., 1, 3.5, 5.0).**
 
 INPUT FOR EVALUATION:
 Generated Caption: "{caption}"
@@ -210,6 +205,7 @@ Reasoning:
             if not text:
                 raise ValueError("Gemini API returned empty or invalid response")
             
+
             return self._parse_llm_response(text)
 
         except Exception as e:
