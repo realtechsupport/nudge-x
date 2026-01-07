@@ -3,7 +3,7 @@ from psycopg2 import Error
 import os
 from PIL import Image
 import io
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from mllm_code.config.database_config import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT
 
@@ -28,14 +28,35 @@ def create_table_if_not_exists():
     if conn:
         try:
             cursor = conn.cursor()
-            # Table for images and captions
+            
+            # Table for pipeline run metadata - MUST be created and committed first
+            # because other tables reference it via foreign key
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS caption_pipeline_runs (
+                    run_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    prompt_version VARCHAR(100),
+                    model_name VARCHAR(255),
+                    temperature FLOAT,
+                    frequency_penalty FLOAT,
+                    top_p FLOAT,
+                    num_shots INT
+                );
+            """)
+            # Commit to ensure caption_pipeline_runs exists before FK references
+            conn.commit()
+            
+            # Table for images and captions - create BEFORE migrations
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS captions (
                     id SERIAL PRIMARY KEY,
+                    run_id UUID REFERENCES caption_pipeline_runs(run_id) ON DELETE SET NULL,
                     filename VARCHAR(255) NOT NULL,
                     mine_name VARCHAR(255),
                     location VARCHAR(255),
                     country VARCHAR(255),
+                    latitude FLOAT,
+                    longitude FLOAT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_accepted BOOLEAN DEFAULT FALSE,
                     is_evaluated BOOLEAN DEFAULT FALSE,
@@ -43,6 +64,28 @@ def create_table_if_not_exists():
                     caption TEXT
                 );
             """)
+            conn.commit()
+            
+            # Add new columns to existing captions table if they don't exist (migration)
+            # This only runs if table already existed without these columns
+            cursor.execute("""
+                DO $$ 
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='captions' AND column_name='run_id') THEN
+                        ALTER TABLE captions ADD COLUMN run_id UUID REFERENCES caption_pipeline_runs(run_id) ON DELETE SET NULL;
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='captions' AND column_name='latitude') THEN
+                        ALTER TABLE captions ADD COLUMN latitude FLOAT;
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='captions' AND column_name='longitude') THEN
+                        ALTER TABLE captions ADD COLUMN longitude FLOAT;
+                    END IF;
+                END $$;
+            """)
+            
             # Table for embedding tracking
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS caption_embeddings (
@@ -62,19 +105,28 @@ def create_table_if_not_exists():
                 );
             """)
 
+            # Create view for frontend captions (replaces frontend_captions table)
             cursor.execute("""
-            CREATE TABLE IF NOT EXISTS frontend_captions (
-            id SERIAL PRIMARY KEY,
-            filename VARCHAR(255) NOT NULL,
-            mine_name VARCHAR(255) NOT NULL,
-            site_location VARCHAR(255) NOT NULL,
-            country VARCHAR(255) NOT NULL,
-            GPS_coordinates VARCHAR(255) NOT NULL,
-            caption TEXT NOT NULL
-        );
-    """)    
+                CREATE OR REPLACE VIEW frontend_captions_view AS
+                SELECT 
+                    c.id,
+                    c.filename,
+                    c.mine_name,
+                    c.location AS site_location,
+                    c.country,
+                    CASE 
+                        WHEN c.latitude IS NOT NULL AND c.longitude IS NOT NULL 
+                        THEN c.latitude || ',' || c.longitude 
+                        ELSE 'Unknown' 
+                    END AS GPS_coordinates,
+                    c.caption
+                FROM captions c
+                WHERE c.is_accepted = TRUE
+                ORDER BY c.created_at DESC;
+            """)
+            
             conn.commit()
-            print("Tables checked/created successfully.")
+            print("Tables and views checked/created successfully.")
         except Error as e:
             print(f"Error creating tables: {e}")
         finally:
@@ -83,30 +135,112 @@ def create_table_if_not_exists():
                 conn.close()
 
 
-def save_filename_and_captions(captions_with_metadata: List[Tuple[str, str, str, str, str, bool, bool, str]]):
+def create_pipeline_run(
+    prompt_version: str,
+    model_name: str,
+    temperature: float,
+    frequency_penalty: float,
+    top_p: float,
+    num_shots: int
+) -> Optional[str]:
     """
-    Saves multiple image metadata entries and their captions to the PostgreSQL database.
-    Returns a list of IDs for the newly saved rows.
+    Creates a new pipeline run record and returns the run_id (UUID).
     
     Args:
-        captions_with_metadata (list of tuples): Each tuple should be 
-        (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question)
+        prompt_version: Version identifier for the prompt used
+        model_name: Name of the model used for generation
+        temperature: Temperature setting for generation
+        frequency_penalty: Frequency penalty setting
+        top_p: Top-p (nucleus sampling) setting
+        num_shots: Number of few-shot examples used
+    
+    Returns:
+        run_id (UUID string) if successful, None otherwise
     """
+    # Ensure tables exist before inserting
+    create_table_if_not_exists()
+    
     conn = connect_db()
     if conn is None:
         return None
 
     try:
         cursor = conn.cursor()
+        
+        insert_sql = """
+            INSERT INTO caption_pipeline_runs 
+                (prompt_version, model_name, temperature, frequency_penalty, top_p, num_shots)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING run_id;
+        """
+        
+        cursor.execute(insert_sql, (
+            prompt_version, model_name, temperature, frequency_penalty,
+            top_p, num_shots
+        ))
+        
+        run_id = cursor.fetchone()[0]
+        conn.commit()
+        print(f"Created pipeline run with ID: {run_id}")
+        return str(run_id)
+        
+    except Exception as e:
+        print(f"Error creating pipeline run: {e}")
+        conn.rollback()
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def save_filename_and_captions(
+    captions_with_metadata: List[Tuple[str, str, str, str, str, bool, bool, str, Optional[float], Optional[float]]],
+    run_id: Optional[str] = None
+):
+    """
+    Saves multiple image metadata entries and their captions to the PostgreSQL database.
+    
+    Args:
+        captions_with_metadata (list of tuples): Each tuple should be 
+            (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question, latitude, longitude)
+        run_id: Optional UUID string linking to caption_pipeline_runs table. 
+                If provided, must exist in caption_pipeline_runs table.
+    """
+    # Ensure tables exist before inserting
+    create_table_if_not_exists()
+    
+    conn = connect_db()
+    if conn is None:
+        return None
+
+    try:
+        cursor = conn.cursor()
+        
+        # Validate run_id exists if provided
+        if run_id is not None:
+            cursor.execute(
+                "SELECT 1 FROM caption_pipeline_runs WHERE run_id = %s;",
+                (run_id,)
+            )
+            if cursor.fetchone() is None:
+                print(f"Error: run_id '{run_id}' does not exist in caption_pipeline_runs table.")
+                print("Please create a pipeline run first using create_pipeline_run().")
+                cursor.close()
+                conn.close()
+                return None
 
         insert_sql = """
-            INSERT INTO captions (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+            INSERT INTO captions (run_id, filename, mine_name, location, country, caption, is_accepted, is_evaluated, question, latitude, longitude)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         """
 
+        # Prepend run_id to each tuple
+        rows_to_insert = [
+            (run_id, *row) for row in captions_with_metadata
+        ]
+        
         # Execute batch insert
-        cursor.executemany(insert_sql, captions_with_metadata)
-
+        cursor.executemany(insert_sql, rows_to_insert)
 
         conn.commit()
         print(f"Inserted {len(captions_with_metadata)} rows into DB.")
@@ -196,7 +330,7 @@ def fetch_captions_without_embeddings(limit: int = 50):
     Returns a list of captions that are accepted and do not yet have embeddings added.
 
     Each row is returned as a dict with keys matching expected usage:
-    id, filename, location, caption, is_accepted, is_evaluated, created_at
+    id, filename, mine_name, location, country, latitude, longitude, caption, is_accepted, is_evaluated, created_at
     """
     conn = connect_db()
     if conn is None:
@@ -206,8 +340,10 @@ def fetch_captions_without_embeddings(limit: int = 50):
         cursor = conn.cursor()
         # Select captions that are accepted AND either have no row in caption_embeddings
         # or have a row with embedding_added = FALSE
+        # Now includes mine_name, country, latitude, longitude for metadata enrichment
         query = """
-            SELECT c.id, c.filename, c.location, c.caption, c.is_accepted, c.is_evaluated, c.created_at
+            SELECT c.id, c.filename, c.mine_name, c.location, c.country, 
+                   c.latitude, c.longitude, c.caption, c.is_accepted, c.is_evaluated, c.created_at
             FROM captions c
             LEFT JOIN caption_embeddings ce ON ce.caption_id = c.id
             WHERE c.is_accepted = TRUE
