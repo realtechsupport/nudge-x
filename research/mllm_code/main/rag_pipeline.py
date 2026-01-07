@@ -70,16 +70,16 @@ class RAGSystem:
         return metadata
 
     def retrieve_context(self, query: str, top_k: int = 3):
-        """Performs a similarity search to find relevant chunks plus their images."""
+        """Performs a similarity search to find relevant chunks plus their images and metadata."""
         query_embedding = self.model.encode(query).tolist()
         
-        # Search for the most relevant vectors
-        search_results = self.client.search(
+        # Search for the most relevant vectors (using query_points for qdrant-client >= 1.7)
+        search_results = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
             limit=top_k,
             with_payload=True
-        )
+        ).points
 
         context_chunks = []
         filenames = []
@@ -87,15 +87,26 @@ class RAGSystem:
 
         for result in search_results:
             payload = result.payload or {}
+            # Use enriched chunk (contains metadata + caption) for context
             chunk_text = payload.get("chunk", "")
+            # Use caption_chunk (without metadata prefix) for cleaner display if available
+            caption_chunk = payload.get("caption_chunk", chunk_text)
+            
             context_chunks.append(chunk_text)
             filenames.append(payload.get("filename"))
+            
+            # Include all metadata in retrieved items
             retrieved_items.append(
                 {
                     "caption_id": payload.get("caption_id"),
-                    "chunk": chunk_text,
+                    "chunk": caption_chunk,
+                    "enriched_chunk": chunk_text,
                     "filename": payload.get("filename"),
+                    "mine_name": payload.get("mine_name"),
+                    "country": payload.get("country"),
                     "location": payload.get("location"),
+                    "latitude": payload.get("latitude"),
+                    "longitude": payload.get("longitude"),
                 }
             )
 
