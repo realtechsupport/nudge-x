@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { getAssetUrl } from "./app_gcp_assets";
 
 // Path (from the web root) to the TSV file. Place the TSV in your Vite `public/` folder.
-export const TSV_URL = "/frontend_captions_2025-12-05.tsv";
+export const TSV_URL = "/frontend_captions_2026-01-08_val.tsv";
 
 /* ----------------- Utility: severity color ----------------- */
 export const getColorForSeverity = (severity) => {
@@ -61,7 +61,7 @@ export function rowsToSites(rows) {
       return {
         id: row.id,
         name: row.site_location,
-		mine: row.mine_name,
+	mine: row.mine_name,
         country: row.country,
         lat,
         lon,

@@ -20,7 +20,7 @@ body {
   font-style: italic;
   text-align: center;
   font-size: clamp(1.5rem, 1.8vw, 2.5rem);
-  margin-bottom: 9rem; /* Increased spacing below title 3rem - 9rem */
+  margin-bottom: 4rem; /* Increased spacing below title 3rem - 9rem */
 }
 
 .site-content-row {
@@ -33,14 +33,14 @@ body {
 }
 
 .site-image {
-  width: 48%;
+  width: 55%;    /*48, 52 */
   height: auto;
   border: 2px solid #444;
   object-fit: contain;
 }
 
 .site-image-placeholder {
-  width: 48%;
+  width: 55%;
   height: auto;
   display: flex;
   align-items: center;
@@ -51,9 +51,9 @@ body {
 }
 
 .site-caption-block {
-  width: 48%;
+  width: 41%;
   white-space: pre-line;
-  font-size: clamp(0.8rem, 1.8vw, 1.5rem);
+  font-size: clamp(0.5rem, 1.4vw, 1.5rem);
   line-height: 1.6;
   text-align: left;
   padding-top: 3rem; /* shift caption downward */
