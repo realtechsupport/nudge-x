@@ -40,7 +40,7 @@ def get_metadata_description(mine_name: str) -> tuple:
         if mine_name in row['Mine name'].lower():
             print("Meta data found for this mine\n")
             country = row['Country']
-            location = row['Location']
+            location = row['Site']
             desc = row['metadata']
             
             # Get GPS coordinates - handle both separate and combined columns

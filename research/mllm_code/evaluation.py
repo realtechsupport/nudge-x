@@ -2,7 +2,7 @@
 import requests
 import json
 import google.generativeai as genai
-import anthropic
+#import anthropic
 from mllm_code.config.settings import EVALUATION_MODEL_NAME
 
 class CaptionEvaluator:
@@ -78,10 +78,17 @@ class CaptionEvaluator:
             "decision_text": "ACCEPT" if decision == 1 else "REJECT"
         }
     
-    def _calculate_decision(self, evaluation_result: dict, weights: dict = None, threshold: float = 3.5) -> int:
-        """Calculate binary decision (0-1) based on weighted average of 0-5 category scores."""
+    def _calculate_decision(self, evaluation_result: dict, weights: dict = None, threshold: float = 3.5, min_category_score: float = 3.0) -> int:
+        """Calculate binary decision (0-1) based on weighted average of 0-5 category scores.
+        
+        Args:
+            evaluation_result: Dict with scores for each category
+            weights: Optional custom weights for each category
+            threshold: Minimum weighted average to accept
+            min_category_score: Minimum score required for EACH category (default 3.0)
+        """
 
-    # Default equal weights for 5 criteria
+        # Default equal weights for 5 criteria
         if weights is None:
             weights = {
                 "Environmental_Focus": 1/5,
@@ -96,6 +103,16 @@ class CaptionEvaluator:
         missing = [k for k in required_keys if k not in evaluation_result]
         if missing:
             raise ValueError(f"Missing evaluation fields: {missing}")
+
+        # Check minimum per-category threshold
+        failed_categories = []
+        for key in required_keys:
+            if evaluation_result[key] < min_category_score:
+                failed_categories.append(f"{key}={evaluation_result[key]:.1f}")
+        
+        if failed_categories:
+            print(f"❌ Categories below minimum ({min_category_score}): {', '.join(failed_categories)}")
+            return 0  # REJECT
 
         # Compute weighted average (since weights sum to 1)
         weighted_score = sum(evaluation_result[k] * weights[k] for k in required_keys)
