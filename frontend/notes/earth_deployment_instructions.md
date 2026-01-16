@@ -1,4 +1,4 @@
-# Earth App – Full Setup & Deployment Runbook (Ubuntu + Vite + Nginx)
+# Earth App – Full Setup & Deployment
 
 This guide shows how to take your project files in **globe** React/Three.js app and get it running on a fresh Ubuntu VM on GCP using **Vite** and **Nginx**.
 
