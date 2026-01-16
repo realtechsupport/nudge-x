@@ -1,4 +1,4 @@
-nstructions to run: (Work in your own user in VM)
+Instructions to run: (Work in your own user in VM)
 
 Clone repo:
 
@@ -33,4 +33,5 @@ Use below command to connect to database using Terminal
 
 psql -h localhost -U Admin1 -d captions_db
 Enter password: The following commands helps to navigate throught the db
+
 \dt - List tables in the current database (captions_db) \x - For expanded display mode (Human redable print) \q - Quit the psql session You can run SQL commands like (always use ; at end);
