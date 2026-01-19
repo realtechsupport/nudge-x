@@ -82,11 +82,28 @@ def time_it(func):
     return wrapper
 
 #------------------------------------------------------------------------------------------------------------
-def LlamaCaptionGenerator(image_file_path, SYSTEM_PROMPT, prompt, model_name, invoke_url, temperature, top_p, max_tokens, frequency_penalty=0.0):
+def LlamaCaptionGenerator(
+    image_file_path,
+    SYSTEM_PROMPT,
+    prompt,
+    model_name,
+    invoke_url,
+    temperature: float = 0.7,
+    top_p: float = 1.0,
+    max_tokens: int = 512,
+    frequency_penalty: float = 0.0,
+    second_image_file_path_or_image=None,
+    first_image_label: str = "RGB",
+    second_image_label: str = "NDVI",
+):
     """
     Generate caption using LLAMA model.
     
     Args:
+        image_file_path: File path OR PIL.Image for the first image (typically RGB)
+        second_image_file_path_or_image: Optional file path OR PIL.Image for the second image (e.g. NDVI)
+        first_image_label: Label for the first image when sending multiple images
+        second_image_label: Label for the second image when sending multiple images
         temperature: Controls randomness. Lower = more deterministic, Higher = more creative (0.0-1.0)
         top_p: Nucleus sampling parameter (0.0-1.0)
         max_tokens: Maximum tokens in response
@@ -97,6 +114,24 @@ def LlamaCaptionGenerator(image_file_path, SYSTEM_PROMPT, prompt, model_name, in
     # The first input image is RGB and the subsequent ones, where made available, are bandoperations (NDBI, NDVI, etc).
 
     image_b64 = compress_image(image_file_path)
+    second_image_b64 = None
+    if second_image_file_path_or_image is not None:
+        second_image_b64 = compress_image(second_image_file_path_or_image)
+
+    if second_image_b64 is None:
+        user_content = f""" {prompt} <img src="data:image/png;base64,{image_b64}" />"""
+    else:
+        # Explicitly label each image so the model knows which is which.
+        user_content = (
+            f"""{prompt}
+
+Image 1 ({first_image_label}):
+<img src="data:image/png;base64,{image_b64}" />
+
+Image 2 ({second_image_label}):
+<img src="data:image/png;base64,{second_image_b64}" />
+"""
+        )
     headers = {
         "Authorization": f"Bearer {os.getenv('NVIDIA_API_KEY')}",
         "Accept": "text/event-stream" if stream else "application/json"
@@ -105,7 +140,7 @@ def LlamaCaptionGenerator(image_file_path, SYSTEM_PROMPT, prompt, model_name, in
         "model": model_name,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f""" {prompt} <img src="data:image/png;base64,{image_b64}" />"""}
+            {"role": "user", "content": user_content}
             # Sai: enable 1, 2 or max 3 input images (for example RGB, NDBI, NDVI)
             # {"role": "user", "content": f""" {prompt} <img src="data:image/png;base64,{image_b64}" />"""}
         ],
