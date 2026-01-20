@@ -16,7 +16,7 @@ LLAMA_MAX_TOKENS = 512
 LLAMA_FREQUENCY_PENALTY = 0.5  # Penalizes repeated words (0.0-2.0, higher = less repetition)
 
 # --- Prompt Version (update when you change system_prompt in prompts.py) ---
-PROMPT_VERSION = "V4"
+PROMPT_VERSION = "V5"
 
 # --- Evaluation Model Configs ---
 EVALUATION_MODEL_NAME = "gemini-2.5-flash"

@@ -35,42 +35,12 @@ class RAGSystem:
         # Use provided client or fall back to host/port
         self.client = client if client is not None else QdrantClient(host=qdrant_host, port=qdrant_port)
         self.collection_name = collection_name
-        self.image_collection_name = image_collection_name
+        self.image_collection_name = None
         self.model = SentenceTransformer(model_name)
         self.vector_size = self.model.get_sentence_embedding_dimension()
 
-    def _fetch_image_metadata(self, filenames: list[str]) -> dict:
-        """Retrieve image payloads from the image collection using filenames as IDs."""
-        if not self.image_collection_name or not filenames:
-            return {}
-
-        unique_ids = list({name for name in filenames if name})
-        if not unique_ids:
-            return {}
-
-        try:
-            records = self.client.retrieve(
-                collection_name=self.image_collection_name,
-                ids=unique_ids,
-                with_payload=True,
-            )
-        except Exception as exc:  # noqa: BLE001
-            print(f"⚠️  Unable to fetch image metadata: {exc}")
-            return {}
-
-        metadata = {}
-        for record in records:
-            key = str(record.id)
-            payload = record.payload or {}
-            metadata[key] = {
-                "image_path": payload.get("image_path") or payload.get("filename"),
-                "image_url": payload.get("image_url"),
-                "location": payload.get("location"),
-            }
-        return metadata
-
     def retrieve_context(self, query: str, top_k: int = 3):
-        """Performs a similarity search to find relevant chunks plus their images and metadata."""
+        """Performs a similarity search to find relevant text chunks plus their metadata."""
         query_embedding = self.model.encode(query).tolist()
         
         # Search for the most relevant vectors (using query_points for qdrant-client >= 1.7)
@@ -82,7 +52,6 @@ class RAGSystem:
         ).points
 
         context_chunks = []
-        filenames = []
         retrieved_items = []
 
         for result in search_results:
@@ -93,7 +62,6 @@ class RAGSystem:
             caption_chunk = payload.get("caption_chunk", chunk_text)
             
             context_chunks.append(chunk_text)
-            filenames.append(payload.get("filename"))
             
             # Include all metadata in retrieved items
             retrieved_items.append(
@@ -109,13 +77,6 @@ class RAGSystem:
                     "longitude": payload.get("longitude"),
                 }
             )
-
-        image_metadata = self._fetch_image_metadata(filenames)
-
-        for item in retrieved_items:
-            filename = item.get("filename")
-            if filename and filename in image_metadata:
-                item.update(image_metadata[filename])
 
         combined_context = " ".join(context_chunks)
         return combined_context, retrieved_items
@@ -161,22 +122,13 @@ class RAGSystem:
         """
   
 
-        system_prompt = """You are a retrieval-augmented assistant for DeepSeek. Answer strictly and exclusively 
-        from content retrieved from the RAG vector database; if a required fact is absent, say you lack sufficient 
-        information and stop, without speculation or outside knowledge. Produce exactly one concise, well-crafted 
-        paragraph of neutral prose (≤250 words) in plain text only; do not use bullet points, numbering, headings, 
-        tables, markdown, emojis, or extra line breaks. Begin with the direct answer, preserve essential 
-        terms, numbers, and dates from the retrieved material, and never mention the retrieval system, 
-        prompts, tools, internal IDs, or your reasoning; return only the final answer."""
-
-        if context_items:
-            image_lines = []
-            for idx, item in enumerate(context_items, start=1):
-                image_ref = item.get("image_url") or item.get("image_path") or item.get("filename") or "unknown image"
-                snippet = (item.get("chunk") or "")[:150]
-                image_lines.append(f"[{idx}] Related image: {image_ref}\nChunk: {snippet}")
-            images_text = "\n\n".join(image_lines)
-            context = f"{context}\n\nReferenced imagery:\n{images_text}"
+        system_prompt = """You are a retrieval-augmented assistant for DeepSeek. Answer strictly and exclusively
+from the provided source text; if a required fact is absent, say you lack sufficient information and stop,
+without speculation or outside knowledge. Produce exactly one concise, well-crafted paragraph of neutral
+prose (≤250 words) in plain text only; do not use bullet points, numbering, headings, tables, markdown,
+emojis, or extra line breaks. Begin with the direct answer, preserve essential terms, numbers, and dates
+from the source text, and never mention or allude to the source, retrieval system, vector database,
+captions, images, prompts, tools, internal IDs, or your reasoning; return only the final answer."""
 
         user_query_with_context = f"Context: {context}\n\nQuestion: {query}"
 
@@ -209,7 +161,7 @@ class RAGSystem:
             return f"An error occurred during API call: {e}"
 
     def generate_response_without_rag(self, query: str, model_name: str):
-        system_prompt = "You are a helpful assistant. Answer the user's questions based on your knowledge."
+        system_prompt = "You are a helpful assistant. Answer the user's questions based on your knowledge within 100 words."
 
         user_query = f"Question: {query}"
 

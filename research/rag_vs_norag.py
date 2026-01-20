@@ -23,12 +23,7 @@ from mllm_code.config.settings import DEEPSEEK_MODEL
 load_dotenv()
 from mllm_code.main.rag_pipeline import *
 
-user_questions_list = ["How do mining operations impact the environment?", 
-"What negative effects does mining have on the environment ?", 
-"How do mining operations in the Canadian Rockies impact the environment?", 
-"How  do mining operations  in DR Congo impact the environment?", 
-"How do mining operatons in Australia impact the environment? Elaborate on specific examples.",
-]
+user_questions_list = ["How do mining operatons in Australia impact the environment? Elaborate on specific examples."]
 qdrant_mode = os.getenv("QDRANT_MODE", "production").lower()
 
 if qdrant_mode == "testing":
