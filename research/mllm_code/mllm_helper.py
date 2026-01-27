@@ -29,6 +29,108 @@ def compress_image(image_path_or_image, max_size=(512,512), quality=70):
     img.save(buffer, format="JPEG", quality=quality)
     return base64.b64encode(buffer.getvalue()).decode()
 
+
+def parse_rgb_image_name(image_path: str) -> tuple:
+    """
+    Parse RGB image filename to extract mine name and date.
+    
+    Expected format: minename_rgb_date.png
+    Example: AdamsPit_rgb_2024-09-13.png
+    
+    Returns:
+        tuple: (mine_name, date) or (None, None) if parsing fails
+    """
+    from pathlib import Path
+    filename = Path(image_path).stem  # Get filename without extension
+    parts = filename.split("_")
+    
+    if len(parts) >= 3 and parts[1].lower() == "rgb":
+        mine_name = parts[0]
+        date = parts[2]
+        return mine_name, date
+    return None, None
+
+
+def find_matching_ndvi_image(rgb_image_path: str, available_images: list) -> str:
+    """
+    Find matching NDVI image for a given RGB image.
+    
+    RGB format: minename_rgb_date.png
+    NDVI format: minename_ndvi_date.png
+    
+    Args:
+        rgb_image_path: Path to the RGB image
+        available_images: List of available image paths (local paths or GCS blob names)
+    
+    Returns:
+        str: Path to matching NDVI image or None if not found
+    """
+    mine_name, date = parse_rgb_image_name(rgb_image_path)
+    if mine_name is None or date is None:
+        return None
+    
+    # Build expected NDVI filename pattern
+    expected_ndvi = f"{mine_name}_ndvi_{date}"
+    
+    for img_path in available_images:
+        from pathlib import Path
+        filename = Path(img_path).stem.lower()
+        if filename.lower() == expected_ndvi.lower():
+            return img_path
+    
+    return None
+
+
+def find_matching_udm_image(rgb_image_path: str, available_images: list) -> str:
+    """
+    Find matching UDM (Urban Dwelling and Mining) binary classifier image for a given RGB image.
+    
+    RGB format: minename_rgb_date.png
+    UDM format: minename_urban_mining_date_overlay.png
+    
+    Args:
+        rgb_image_path: Path to the RGB image
+        available_images: List of available image paths (local paths or GCS blob names)
+    
+    Returns:
+        str: Path to matching UDM overlay image or None if not found
+    """
+    mine_name, date = parse_rgb_image_name(rgb_image_path)
+    if mine_name is None or date is None:
+        return None
+    
+    # Build expected UDM overlay filename pattern
+    expected_udm = f"{mine_name}_urban_mining_{date}_overlay"
+    
+    for img_path in available_images:
+        from pathlib import Path
+        filename = Path(img_path).stem.lower()
+        if filename.lower() == expected_udm.lower():
+            return img_path
+    
+    return None
+
+
+def find_matching_auxiliary_images(rgb_image_path: str, available_images: list) -> dict:
+    """
+    Find all matching auxiliary images (NDVI, UDM) for a given RGB image.
+    
+    Args:
+        rgb_image_path: Path to the RGB image
+        available_images: List of available image paths
+    
+    Returns:
+        dict: {
+            'ndvi': path or None,
+            'udm': path or None
+        }
+    """
+    return {
+        'ndvi': find_matching_ndvi_image(rgb_image_path, available_images),
+        'udm': find_matching_udm_image(rgb_image_path, available_images)
+    }
+
+
 def get_metadata_description(mine_name: str) -> tuple:
     """Return site description and GPS coordinates by fuzzy matching mine name.
     
@@ -93,8 +195,10 @@ def LlamaCaptionGenerator(
     max_tokens: int = 512,
     frequency_penalty: float = 0.0,
     second_image_file_path_or_image=None,
+    third_image_file_path_or_image=None,
     first_image_label: str = "RGB",
     second_image_label: str = "NDVI",
+    third_image_label: str = "UDM",
 ):
     """
     Generate caption using LLAMA model.
@@ -102,8 +206,10 @@ def LlamaCaptionGenerator(
     Args:
         image_file_path: File path OR PIL.Image for the first image (typically RGB)
         second_image_file_path_or_image: Optional file path OR PIL.Image for the second image (e.g. NDVI)
+        third_image_file_path_or_image: Optional file path OR PIL.Image for the third image (e.g. UDM binary classifier)
         first_image_label: Label for the first image when sending multiple images
         second_image_label: Label for the second image when sending multiple images
+        third_image_label: Label for the third image when sending multiple images (default: UDM)
         temperature: Controls randomness. Lower = more deterministic, Higher = more creative (0.0-1.0)
         top_p: Nucleus sampling parameter (0.0-1.0)
         max_tokens: Maximum tokens in response
@@ -115,13 +221,20 @@ def LlamaCaptionGenerator(
 
     image_b64 = compress_image(image_file_path)
     second_image_b64 = None
+    third_image_b64 = None
+    
     if second_image_file_path_or_image is not None:
         second_image_b64 = compress_image(second_image_file_path_or_image)
+    
+    if third_image_file_path_or_image is not None:
+        third_image_b64 = compress_image(third_image_file_path_or_image)
 
-    if second_image_b64 is None:
+    # Build user content based on how many images are provided
+    if second_image_b64 is None and third_image_b64 is None:
+        # Only RGB image
         user_content = f""" {prompt} <img src="data:image/png;base64,{image_b64}" />"""
-    else:
-        # Explicitly label each image so the model knows which is which.
+    elif third_image_b64 is None:
+        # RGB + second image (e.g., NDVI)
         user_content = (
             f"""{prompt}
 
@@ -130,6 +243,33 @@ Image 1 ({first_image_label}):
 
 Image 2 ({second_image_label}):
 <img src="data:image/png;base64,{second_image_b64}" />
+"""
+        )
+    elif second_image_b64 is None:
+        # RGB + third image only (e.g., UDM without NDVI)
+        user_content = (
+            f"""{prompt}
+
+Image 1 ({first_image_label}):
+<img src="data:image/png;base64,{image_b64}" />
+
+Image 2 ({third_image_label}):
+<img src="data:image/png;base64,{third_image_b64}" />
+"""
+        )
+    else:
+        # All three images: RGB + NDVI + UDM
+        user_content = (
+            f"""{prompt}
+
+Image 1 ({first_image_label}):
+<img src="data:image/png;base64,{image_b64}" />
+
+Image 2 ({second_image_label}):
+<img src="data:image/png;base64,{second_image_b64}" />
+
+Image 3 ({third_image_label}):
+<img src="data:image/png;base64,{third_image_b64}" />
 """
         )
     headers = {

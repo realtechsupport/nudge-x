@@ -7,7 +7,10 @@ import json
 import time
 from typing import List, Tuple, Optional
 from mllm_code.prompts import system_prompt, questions, multi_shot_examples
-from mllm_code.mllm_helper import *
+from mllm_code.mllm_helper import (
+    LlamaPromptGenerator_mines, LlamaCaptionGenerator, KosmosPromptGenerator,
+    KosmosCaptionGenerator, find_matching_auxiliary_images, compress_image
+)
 from mllm_code.evaluation import CaptionEvaluator
 from mllm_code.database_pipeline.database_operations import create_table_if_not_exists, save_filename_and_captions, create_pipeline_run
 from mllm_code.config.settings import (
@@ -28,13 +31,60 @@ class Captions:
     Each saved tuple = (basename, mine_name, location, country, caption, is_accepted, is_evaluated, question, latitude, longitude).
     """
 
-    def __init__(self, mllm_model: str, images_folder_path: str, questions: List[str], batch_size: int = 5, prompt_version: str = PROMPT_VERSION):
+    def __init__(
+        self,
+        mllm_model: str,
+        images_folder_path: str,
+        questions: List[str],
+        batch_size: int = 5,
+        prompt_version: str = PROMPT_VERSION,
+        use_ndvi: bool = True,
+        use_udm: bool = True
+    ):
+        """
+        Initialize the Captions generator.
+        
+        Args:
+            mllm_model: Model to use ("LLAMA" or "KOSMOS")
+            images_folder_path: Path to images (local or gs://)
+            questions: List of questions to ask about each image
+            batch_size: Number of images to process per batch
+            prompt_version: Version of prompts to use
+            use_ndvi: Whether to include NDVI images if available (default: True)
+            use_udm: Whether to include UDM binary classifier images if available (default: True)
+        
+        Examples:
+            # RGB only (ignore NDVI and UDM even if they exist)
+            Captions(..., use_ndvi=False, use_udm=False)
+            
+            # RGB + NDVI only
+            Captions(..., use_ndvi=True, use_udm=False)
+            
+            # RGB + UDM only
+            Captions(..., use_ndvi=False, use_udm=True)
+            
+            # RGB + NDVI + UDM (default)
+            Captions(..., use_ndvi=True, use_udm=True)
+        """
         self.mllm_model = mllm_model
         self.images_folder_path = images_folder_path
         self.questions = questions
         self.batch_size = batch_size
         self.prompt_version = prompt_version
+        self.use_ndvi = use_ndvi
+        self.use_udm = use_udm
         self.run_id: Optional[str] = None
+        
+        # Log the image combination being used
+        aux_images = []
+        if use_ndvi:
+            aux_images.append("NDVI")
+        if use_udm:
+            aux_images.append("UDM")
+        if aux_images:
+            print(f"📸 Image mode: RGB + {' + '.join(aux_images)}")
+        else:
+            print(f"📸 Image mode: RGB only")
 
         self._model_selector = {
             "LLAMA": self._llama,
@@ -48,18 +98,23 @@ class Captions:
             self.bucket_name = images_folder_path.split("/")[2]
             self.bucket = self.client.bucket(self.bucket_name)
             self.prefix = "/".join(images_folder_path.split("/")[3:])
-            self.image_files = self._list_gcs_images()
+            # Store all images for auxiliary lookup
+            self.all_image_files = self._list_gcs_images()
+            # Filter to only RGB images for primary processing
+            self.image_files = self._filter_rgb_images(self.all_image_files)
         else:
             # --- Handle local path ---
             print(f"Detected local path: {images_folder_path}")
-            self.image_files = [
+            self.all_image_files = [
                 os.path.join(images_folder_path, f)
                 for f in os.listdir(images_folder_path)
                 if f.lower().endswith((".png", ".jpg", ".jpeg"))
             ]
+            # Filter to only RGB images for primary processing
+            self.image_files = self._filter_rgb_images(self.all_image_files)
 
         if not self.image_files:
-            raise ValueError(f"No images found in {images_folder_path}")
+            raise ValueError(f"No RGB images found in {images_folder_path}. Expected naming: minename_rgb_date.png")
         
     def _list_gcs_images(self):
         blobs = self.bucket.list_blobs(prefix=self.prefix)
@@ -67,6 +122,21 @@ class Captions:
             blob.name for blob in blobs
             if blob.name.lower().endswith((".png", ".jpg", ".jpeg"))
         ]
+
+    def _filter_rgb_images(self, image_files: List[str]) -> List[str]:
+        """
+        Filter list of images to only include RGB images.
+        RGB images follow naming: minename_rgb_date.png
+        """
+        rgb_images = []
+        for img_path in image_files:
+            basename = os.path.basename(img_path)
+            name_without_ext = os.path.splitext(basename)[0]
+            parts = name_without_ext.split("_")
+            # Check if this is an RGB image: minename_rgb_date
+            if len(parts) >= 3 and parts[1].lower() == "rgb":
+                rgb_images.append(img_path)
+        return rgb_images
 
     def _load_image_from_gcs(self, blob_name: str):
         """Download a single image as PIL.Image."""
@@ -127,6 +197,21 @@ class Captions:
                 # batch contains blob names (strings), image_objs contains (pil_image, basename) tuples
                 image_objs = self._load_images_in_batch(batch)
                 for blob_name, (pil_image, basename) in zip(batch, image_objs):
+                    # Find auxiliary images (NDVI, UDM) for this RGB image
+                    aux_images = find_matching_auxiliary_images(blob_name, self.all_image_files)
+                    
+                    # Load auxiliary images if found AND enabled
+                    ndvi_image = None
+                    udm_image = None
+                    
+                    if self.use_ndvi and aux_images['ndvi']:
+                        print(f"  Using NDVI image: {os.path.basename(aux_images['ndvi'])}")
+                        ndvi_image, _ = self._load_image_from_gcs(aux_images['ndvi'])
+                    
+                    if self.use_udm and aux_images['udm']:
+                        print(f"  Using UDM overlay: {os.path.basename(aux_images['udm'])}")
+                        udm_image, _ = self._load_image_from_gcs(aux_images['udm'])
+                    
                     for question in self.questions:
                         print(f"Processing image: {basename}")
                         # Pass blob_name (string path) to LlamaPromptGenerator for metadata extraction
@@ -135,7 +220,12 @@ class Captions:
                         caption = LlamaCaptionGenerator(
                             pil_image, system_prompt, prompt,
                             LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
-                            LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY
+                            LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
+                            second_image_file_path_or_image=ndvi_image,
+                            third_image_file_path_or_image=udm_image,
+                            first_image_label="RGB",
+                            second_image_label="NDVI",
+                            third_image_label="UDM"
                         )
 
                         print("Caption generated: ", caption)
@@ -146,13 +236,30 @@ class Captions:
             # --- Local path flow --- #
             else:
                 for image_file in batch:
+                    # Find auxiliary images (NDVI, UDM) for this RGB image
+                    aux_images = find_matching_auxiliary_images(image_file, self.all_image_files)
+                    
+                    # Only use auxiliary images if enabled
+                    ndvi_path = aux_images['ndvi'] if self.use_ndvi else None
+                    udm_path = aux_images['udm'] if self.use_udm else None
+                    
+                    if ndvi_path:
+                        print(f"  Using NDVI image: {os.path.basename(ndvi_path)}")
+                    if udm_path:
+                        print(f"  Using UDM overlay: {os.path.basename(udm_path)}")
+                    
                     for question in self.questions:
                         print(f"Processing image: {image_file}")
                         prompt, location, basename, country, mine_name, latitude, longitude = LlamaPromptGenerator_mines(image_file, question)
                         caption = LlamaCaptionGenerator(
                             image_file, system_prompt, prompt,
                             LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
-                            LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY
+                            LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
+                            second_image_file_path_or_image=ndvi_path,
+                            third_image_file_path_or_image=udm_path,
+                            first_image_label="RGB",
+                            second_image_label="NDVI",
+                            third_image_label="UDM"
                         )
 
                         print("Caption generated: ", caption)

@@ -9,6 +9,7 @@ langchain-text-splitters
 qdrant-client
 tiktoken
 pandas
+pymupdf
 #openeo
 #gdal
 #rasterio

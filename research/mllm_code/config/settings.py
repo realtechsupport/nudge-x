@@ -16,7 +16,24 @@ LLAMA_MAX_TOKENS = 512
 LLAMA_FREQUENCY_PENALTY = 0.5  # Penalizes repeated words (0.0-2.0, higher = less repetition)
 
 # --- Prompt Version (update when you change system_prompt in prompts.py) ---
-PROMPT_VERSION = "V5"
+PROMPT_VERSION = "V6"
+
+# --- Image Input Configuration ---
+# Control which auxiliary images to use alongside RGB
+# USE_NDVI: Include NDVI images if available
+# USE_UDM: Include UDM (Urban Dwelling and Mining) binary classifier images if available
+#
+# Combinations:
+#   USE_NDVI=False, USE_UDM=False  -> RGB only
+#   USE_NDVI=True,  USE_UDM=False  -> RGB + NDVI
+#   USE_NDVI=False, USE_UDM=True   -> RGB + UDM
+#   USE_NDVI=True,  USE_UDM=True   -> RGB + NDVI + UDM
+USE_NDVI = True
+USE_UDM = True
+
+# --- Multishot Examples ---
+
+USE_MULTISHOT = False
 
 # --- Evaluation Model Configs ---
 EVALUATION_MODEL_NAME = "gemini-2.5-flash"
