@@ -13,12 +13,16 @@ htmlcov/
 
 # Local logs
 qdrant_ping.log
+*.log
 
 # Virtual environment
 mllm_venv/
+
+# Local data outputs (not committed)
+data/test_captions_*.csv
+data/test_images/
 
 node_modules/
 dist/
 .parcel-cache/
 .DS_Store
-
