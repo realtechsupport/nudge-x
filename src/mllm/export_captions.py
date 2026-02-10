@@ -2,9 +2,9 @@
 Export accepted captions for a specific pipeline run to TSV.
 
 Usage:
-    python -m mllm_code.export_captions --list-runs
-    python -m mllm_code.export_captions <run_id>
-    python -m mllm_code.export_captions <run_id> --output /path/to/output.tsv
+    python -m mllm.export_captions --list-runs
+    python -m mllm.export_captions <run_id>
+    python -m mllm.export_captions <run_id> --output /path/to/output.tsv
 """
 
 import argparse
@@ -17,7 +17,7 @@ from typing import Iterable, Tuple
 
 from dotenv import load_dotenv
 
-from mllm_code.database_pipeline.database_operations import connect_db
+from database_pipeline.database_operations import connect_db
 
 
 def list_runs(limit: int = 20) -> None:
@@ -167,7 +167,7 @@ def main() -> None:
     if not output_path:
         short_id = run_id.split("-")[0]
         today = date.today().isoformat()
-        # Resolve project root (two levels up from this file: src/mllm_code/...)
+        # Resolve project root (two levels up from this file: src/mllm/...)
         project_root = Path(__file__).resolve().parents[2]
         default_dir = project_root / "data" / "frontend_captions"
         output_path = str(default_dir / f"captions_{short_id}_{today}.tsv")

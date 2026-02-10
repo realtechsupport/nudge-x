@@ -11,7 +11,7 @@ import pandas as pd
 from PIL import Image
 from dotenv import load_dotenv
 
-from mllm_code.prompts import system_prompt, multi_shot_examples
+from mllm.prompts import system_prompt, multi_shot_examples
 
 load_dotenv()
 
@@ -128,19 +128,27 @@ def find_matching_auxiliary_images(rgb_image_path: str, available_images: list) 
     }
 
 
-def get_metadata_description(mine_name: str) -> tuple:
+def get_metadata_description(mine_name: str, silent: bool = False) -> tuple:
     """Return site description and GPS coordinates by fuzzy matching mine name.
     
+    Args:
+        mine_name: Mine name to look up (e.g. from parse_rgb_image_name).
+        silent: If True, do not print "Metadata found" / "No metadata found".
+
     Returns:
         tuple: (country, location, description, latitude, longitude)
     """
     mine_name = mine_name.strip().lower()
     for idx, row in metadata_df.iterrows():
         if mine_name in row['Mine name'].lower():
-            print("Metadata found for this mine.")
+            if not silent:
+                print("Metadata found for this mine.")
             country = row['Country']
             location = row['Site']
             desc = row['metadata']
+            # Normalize NaN or empty string to None
+            if pd.isna(desc) or str(desc).strip() == "":
+                desc = None
             
             # Get GPS coordinates - handle both separate and combined columns
             latitude = None
@@ -168,8 +176,26 @@ def get_metadata_description(mine_name: str) -> tuple:
             
             return country, location, desc, latitude, longitude
     
-    print("No metadata found for this mine.")
+    if not silent:
+        print("No metadata found for this mine.")
     return None, None, None, None, None
+
+
+def has_metadata_for_image(image_path: str) -> bool:
+    """
+    Return True if this RGB image has a matching row in the metadata CSV.
+
+    Uses parse_rgb_image_name to get mine name from filename (minename_rgb_date.png),
+    then get_metadata_description to check for metadata. Images without metadata
+    should be skipped by the captions pipeline. Uses silent=True to avoid printing
+    for each checked image.
+    """
+    mine_name, _ = parse_rgb_image_name(image_path)
+    if mine_name is None:
+        return False
+    _, _, desc, _, _ = get_metadata_description(mine_name, silent=True)
+    return desc is not None
+
 
 #------------------------------------------------------------------------------------------------------------
 def LlamaCaptionGenerator(

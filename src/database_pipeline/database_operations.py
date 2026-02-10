@@ -3,7 +3,7 @@ from psycopg2 import Error
 import os
 from typing import List, Tuple, Optional
 
-from mllm_code.config.database_config import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT
+from mllm.config.database_config import POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT
 
 def connect_db():
     """Establishes a connection to the PostgreSQL database."""

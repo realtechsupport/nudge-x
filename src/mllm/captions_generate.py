@@ -6,14 +6,15 @@ import os
 import json
 import time
 from typing import List, Tuple, Optional
-from mllm_code.prompts import system_prompt, questions, multi_shot_examples
-from mllm_code.mllm_helper import (
+from mllm.prompts import system_prompt, questions, multi_shot_examples
+from sentinel.mllm_helper import (
     LlamaPromptGenerator_mines, LlamaCaptionGenerator, KosmosPromptGenerator,
-    KosmosCaptionGenerator, find_matching_auxiliary_images, compress_image
+    KosmosCaptionGenerator, find_matching_auxiliary_images, compress_image,
+    has_metadata_for_image,
 )
-from mllm_code.evaluation import CaptionEvaluator
-from mllm_code.database_pipeline.database_operations import create_table_if_not_exists, save_filename_and_captions, create_pipeline_run
-from mllm_code.config.settings import (
+from mllm.evaluation import CaptionEvaluator
+from database_pipeline.database_operations import create_table_if_not_exists, save_filename_and_captions, create_pipeline_run
+from mllm.config.settings import (
     LLAMA_MODEL_NAME, LLAMA_INVOKE_URL, LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
     PROMPT_VERSION
 )
@@ -113,8 +114,17 @@ class Captions:
             # Filter to only RGB images for primary processing
             self.image_files = self._filter_rgb_images(self.all_image_files)
 
+        # Only process images that have metadata in METADATA_CSV; ignore the rest
+        before = len(self.image_files)
+        self.image_files = [p for p in self.image_files if has_metadata_for_image(p)]
+        skipped = before - len(self.image_files)
+        if skipped:
+            print(f"Skipped {skipped} RGB image(s) with no metadata. Processing {len(self.image_files)} image(s).")
         if not self.image_files:
-            raise ValueError(f"No RGB images found in {images_folder_path}. Expected naming: minename_rgb_date.png")
+            raise ValueError(
+                f"No RGB images with metadata found in {images_folder_path}. "
+                "Expected naming: minename_rgb_date.png and mine name must match a row in METADATA_CSV."
+            )
         
     def _list_gcs_images(self):
         blobs = self.bucket.list_blobs(prefix=self.prefix)

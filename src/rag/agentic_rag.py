@@ -12,14 +12,14 @@ from qdrant_client import models as qmodels
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
-from mllm_code.config.database_config import (
+from mllm.config.database_config import (
     QDRANT_COLLECTION_NAME, EMBEDDING_MODEL_NAME,
     QDRANT_URL, QDRANT_API_KEY
 )
-from mllm_code.database_pipeline.vector_db_operations import (
+from database_pipeline.vector_db_operations import (
     create_qdrant_client, create_qdrant_client_api, create_qdrant_client_testing
 )
-from mllm_code.config.settings import DEEPSEEK_MODEL
+from mllm.config.settings import DEEPSEEK_MODEL
 
 load_dotenv()
 

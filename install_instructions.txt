@@ -8,6 +8,8 @@ git sparse-checkout init --cone
 git sparse-checkout set src data docs .env.example .gitignore README.md
 git checkout main
 
+All project data (metadata, exported captions, etc.) lives under data/.
+
 Make sure to create your own .env file. The template is found in .env.example file
 Make sure to add your_venv_name into .gitignore
 
@@ -39,10 +41,10 @@ Quick reference: main pipelines (run from inside 'src')
 1) Generate captions from images
 
 MacOS / Linux:
-python3 -m mllm_code.main.captions_pipeline
+python3 -m mllm.main.captions_pipeline
 
 Windows:
-python -m mllm_code.main.captions_pipeline
+python -m mllm.main.captions_pipeline
 
 - Uses IMAGE_DIR from your .env
 - Processes all RGB images in that folder or GCS prefix
@@ -50,27 +52,27 @@ python -m mllm_code.main.captions_pipeline
 
 2) Vectorize accepted captions into Qdrant
 
-python3 -m mllm_code.main.vectorization_pipeline
+python3 -m mllm.main.vectorization_pipeline
 
 - Reads accepted captions from PostgreSQL
 - Creates/updates the 'captions_collection' in Qdrant
 
 3) Run RAG over captions only
 
-python3 -m mllm_code.main.rag_pipeline
+python3 -m rag.rag_pipeline
 
 - Opens an interactive prompt
 - Uses Qdrant 'captions_collection' plus DeepSeek to answer questions
 
 4) Run Agentic RAG (captions + documents)
 
-python3 -m mllm_code.agentic_rag
+python3 -m rag.agentic_rag
 
 - Uses both 'captions_collection' and 'documents' collections in Qdrant
 
 5) Ingest documents into Qdrant (for Agentic RAG)
 
-python3 -m mllm_code.document_ingestion path/to/file_or_directory
+python3 -m rag.document_ingestion path/to/file_or_directory
 
 Exporting captions for a specific pipeline run
 -----------------------------------------------------------------------------
@@ -79,11 +81,11 @@ From inside 'src':
 
 1) List recent runs
 
-python3 -m mllm_code.export_captions --list-runs
+python3 -m mllm.export_captions --list-runs
 
 2) Export accepted captions for a given run_id
 
-python3 -m mllm_code.export_captions <run_id>
+python3 -m mllm.export_captions <run_id>
 
 By default this writes a TSV file to:
 

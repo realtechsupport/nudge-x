@@ -4,22 +4,22 @@ import tiktoken
 from dotenv import load_dotenv
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from mllm_code.config.database_config import (
+from mllm.config.database_config import (
     QDRANT_COLLECTION_NAME,
     EMBEDDING_MODEL_NAME,
 )
-from mllm_code.database_pipeline.database_operations import (
+from database_pipeline.database_operations import (
     fetch_captions_without_embeddings,
     mark_embeddings_added,
 )
-from mllm_code.database_pipeline.vector_db_operations import (
+from database_pipeline.vector_db_operations import (
     create_qdrant_client,
     create_qdrant_client_testing,
     create_qdrant_client_api,
     initialize_embedding_model,
     add_captions_to_vector_db,
 )
-from mllm_code.config import validate_env
+from mllm.config import validate_env
 
 encoding = tiktoken.get_encoding("cl100k_base")
 

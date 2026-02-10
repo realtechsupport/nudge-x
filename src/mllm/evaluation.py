@@ -1,7 +1,7 @@
 import requests
 import json
 import google.generativeai as genai
-from mllm_code.config.settings import EVALUATION_MODEL_NAME
+from mllm.config.settings import EVALUATION_MODEL_NAME
 
 class CaptionEvaluator:
     """

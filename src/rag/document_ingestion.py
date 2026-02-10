@@ -14,10 +14,10 @@ from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
 
-from mllm_code.config.database_config import (
+from mllm.config.database_config import (
     EMBEDDING_MODEL_NAME, QDRANT_URL, QDRANT_API_KEY
 )
-from mllm_code.database_pipeline.vector_db_operations import (
+from database_pipeline.vector_db_operations import (
     create_qdrant_client, create_qdrant_client_api, create_qdrant_client_testing,
     get_or_create_collection
 )

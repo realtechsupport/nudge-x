@@ -21,8 +21,8 @@ For environment setup and required variables, see
 ## 1. Captions pipeline
 
 **Entry point**:  
-`[src/mllm_code/main/captions_pipeline.py](src/mllm_code/main/captions_pipeline.py)`  
-Uses `[src/mllm_code/captions_generate.py](src/mllm_code/captions_generate.py)`.
+`[src/mllm/main/captions_pipeline.py](src/mllm/main/captions_pipeline.py)`  
+Uses `[src/mllm/captions_generate.py](src/mllm/captions_generate.py)`.
 
 ### What it does
 
@@ -47,14 +47,14 @@ Uses `[src/mllm_code/captions_generate.py](src/mllm_code/captions_generate.py)`.
   - Scans the folder for `.png`, `.jpg`, `.jpeg`.
   - Filters to RGB images using the same naming pattern.
 
-In both cases, **all RGB images under `IMAGE_DIR` are processed**.
+In both cases, **only RGB images with non-empty metadata are processed**: the pipeline looks up the mine name (from the filename, e.g. `MineName_rgb_2024-09-13.png`) in the `METADATA_CSV` file. An image is processed only if there is a matching row **and** the `metadata` column in that row is not empty. Images with no match or empty metadata are ignored, and a count of skipped images is printed at startup.
 
 ### Command
 
 From `src/`:
 
 ```bash
-python -m mllm_code.main.captions_pipeline
+python -m mllm.main.captions_pipeline
 ```
 
 This script:
@@ -89,11 +89,11 @@ You should see new rows in `captions` linked to a recent `run_id`.
 ## 2. Vectorization pipeline (captions → Qdrant)
 
 **Entry point**:  
-`[src/mllm_code/main/vectorization_pipeline.py](src/mllm_code/main/vectorization_pipeline.py)`  
+`[src/mllm/main/vectorization_pipeline.py](src/mllm/main/vectorization_pipeline.py)`  
 Uses:
 
-- `[src/mllm_code/database_pipeline/database_operations.py](src/mllm_code/database_pipeline/database_operations.py)`
-- `[src/mllm_code/database_pipeline/vector_db_operations.py](src/mllm_code/database_pipeline/vector_db_operations.py)`
+- `[src/database_pipeline/database_operations.py](src/database_pipeline/database_operations.py)`
+- `[src/database_pipeline/vector_db_operations.py](src/database_pipeline/vector_db_operations.py)`
 
 ### What it does
 
@@ -112,7 +112,7 @@ Uses:
 From `src/`:
 
 ```bash
-python -m mllm_code.main.vectorization_pipeline
+python -m mllm.main.vectorization_pipeline
 ```
 
 ### How to verify
@@ -128,7 +128,7 @@ python -m mllm_code.main.vectorization_pipeline
 ## 3. RAG pipeline (captions‑only Q&A)
 
 **Entry point**:  
-`[src/mllm_code/main/rag_pipeline.py](src/mllm_code/main/rag_pipeline.py)`
+`[src/rag/rag_pipeline.py](src/rag/rag_pipeline.py)`
 
 ### What it does
 
@@ -144,7 +144,7 @@ python -m mllm_code.main.vectorization_pipeline
 From `src/`:
 
 ```bash
-python -m mllm_code.main.rag_pipeline
+python -m rag.rag_pipeline
 ```
 
 You will see a prompt:
@@ -167,7 +167,7 @@ and press Enter.
 ## 4. Agentic RAG (captions + documents with self‑evaluation)
 
 **Entry point**:  
-`[src/mllm_code/agentic_rag.py](src/mllm_code/agentic_rag.py)`  
+`[src/rag/agentic_rag.py](src/rag/agentic_rag.py)`  
 Works with:
 
 - Captions collection (from vectorization pipeline)
@@ -190,7 +190,7 @@ Works with:
 From `src/`:
 
 ```bash
-python -m mllm_code.agentic_rag
+python -m rag.agentic_rag
 ```
 
 You will see an interactive prompt. Type questions and inspect the printed
@@ -210,7 +210,7 @@ answers and metadata.
 ## 5. Document ingestion
 
 **Entry point**:  
-`[src/mllm_code/document_ingestion.py](src/mllm_code/document_ingestion.py)`
+`[src/rag/document_ingestion.py](src/rag/document_ingestion.py)`
 
 ### What it does
 
@@ -225,13 +225,13 @@ From `src/`:
 
 ```bash
 # Ingest a single document
-python -m mllm_code.document_ingestion path/to/file.pdf --title "Doc title"
+python -m rag.document_ingestion path/to/file.pdf --title "Doc title"
 
 # Ingest all supported documents from a directory
-python -m mllm_code.document_ingestion path/to/dir
+python -m rag.document_ingestion path/to/dir
 
 # Hierarchical ingest (doc → section → chunk)
-python -m mllm_code.document_ingestion path/to/file.pdf --hierarchical --title "Doc title"
+python -m rag.document_ingestion path/to/file.pdf --hierarchical --title "Doc title"
 ```
 
 ### How to verify
@@ -239,8 +239,8 @@ python -m mllm_code.document_ingestion path/to/file.pdf --hierarchical --title "
 - Use the built‑in inspect and stats options:
 
 ```bash
-python -m mllm_code.document_ingestion --stats
-python -m mllm_code.document_ingestion --inspect 5
+python -m rag.document_ingestion --stats
+python -m rag.document_ingestion --inspect 5
 ```
 
 These commands print collection stats and sample chunks from Qdrant.
@@ -255,16 +255,16 @@ For a fresh run starting from images:
    - Clone repo and create virtualenv (`install_instructions.txt`).
    - Configure `.env` (`docs/setup_and_env.md`).
 2. **Generate captions**
-   - `cd research`
-   - `python -m mllm_code.main.captions_pipeline`
+   - `cd src`
+   - `python -m mllm.main.captions_pipeline`
 3. **Vectorize captions**
-   - `python -m mllm_code.main.vectorization_pipeline`
+   - `python -m mllm.main.vectorization_pipeline`
 4. **(Optional) Ingest documents**
-   - `python -m mllm_code.document_ingestion path/to/docs --hierarchical`
+   - `python -m rag.document_ingestion path/to/docs --hierarchical`
 5. **Run analysis**
-   - RAG: `python -m mllm_code.main.rag_pipeline`
-   - Agentic RAG: `python -m mllm_code.agentic_rag`
+   - RAG: `python -m rag.rag_pipeline`
+   - Agentic RAG: `python -m rag.agentic_rag`
 6. **Export captions for a specific run**
-   - `python -m mllm_code.export_captions --list-runs`
-   - `python -m mllm_code.export_captions <run_id>`
+   - `python -m mllm.export_captions --list-runs`
+   - `python -m mllm.export_captions <run_id>`
 

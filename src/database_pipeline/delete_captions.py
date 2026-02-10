@@ -3,17 +3,17 @@ Delete/clear the captions collection in Qdrant and reset PostgreSQL embedding tr
 Run this before re-embedding to start fresh.
 
 Usage:
-    python -m mllm_code.database_pipeline.delete_captions
+    python -m database_pipeline.delete_captions
 """
 
 import os
 from dotenv import load_dotenv
-from mllm_code.config.database_config import QDRANT_COLLECTION_NAME, QDRANT_URL, QDRANT_API_KEY
-from mllm_code.database_pipeline.vector_db_operations import (
+from mllm.config.database_config import QDRANT_COLLECTION_NAME, QDRANT_URL, QDRANT_API_KEY
+from database_pipeline.vector_db_operations import (
     create_qdrant_client,
     create_qdrant_client_api,
 )
-from mllm_code.database_pipeline.database_operations import connect_db
+from database_pipeline.database_operations import connect_db
 
 load_dotenv()
 
@@ -68,7 +68,7 @@ def delete_collection():
     reset_embedding_tracking()
     
     print("\nNext step: Re-run vectorization to re-embed with metadata:")
-    print("   python -m mllm_code.main.vectorization_pipeline")
+    print("   python -m mllm.main.vectorization_pipeline")
 
 
 if __name__ == "__main__":

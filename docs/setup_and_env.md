@@ -6,7 +6,7 @@ environment variables so you can run the main pipelines.
 ### 1. Python environment
 
 - **Recommended**: Python 3.10+
-- Create and activate a virtual environment in the project root (`nudge-x`):
+- Create and activate a virtual environment in the project root (`nudge-x`).
 
 MacOS / Linux:
 
@@ -34,19 +34,19 @@ REM 2) Then install the rest of the dependencies
 pip install -r requirements.txt
 ```
 
-> For more detailed clone instructions, see `install_instructions.txt`.
+> For clone + sparse-checkout details, see `install_instructions.txt`.
 
 ### 2. Environment variables (`.env`)
 
 All pipelines rely on environment variables loaded via `python-dotenv`. The
-validation helper in `[src/mllm_code/config/__init__.py](src/mllm_code/config/__init__.py)`
+validation helper in `[src/mllm/config/__init__.py](src/mllm/config/__init__.py)`
 (`validate_env()`) checks that the most important ones are set.
 
 Create a `.env` file in the project root, using `.env.example` as a template,
-and define at least the following variables:
+and define at least the following variables.
 
 **PostgreSQL (captions database)**  
-Used by `[src/mllm_code/database_pipeline/database_operations.py](src/mllm_code/database_pipeline/database_operations.py)`.
+Used by `[src/database_pipeline/database_operations.py](src/database_pipeline/database_operations.py)`.
 
 - `POSTGRES_DB` – database name (e.g., `captions_db`)
 - `POSTGRES_USER` – database user (e.g., `Admin1`)
@@ -56,14 +56,16 @@ Used by `[src/mllm_code/database_pipeline/database_operations.py](src/mllm_code/
 
 **Image and metadata paths**
 
+All project data lives under `data/`; metadata CSVs and TSVs are in `data/metadata/`.
+
 - `IMAGE_DIR` – path to satellite images, either:
   - local folder (e.g., `/home/you/data/images`), or
   - GCS path (e.g., `gs://nudge-bucket/path/to/images`)
-- `METADATA_CSV` – path to the mines metadata CSV used by `mllm_helper.py`
+- `METADATA_CSV` – path to the mines metadata CSV used by `src/sentinel/mllm_helper.py`
   (e.g., `data/metadata/Mines_Metadata_v26.csv`)
 
-**Qdrant (vector database)**
-Configured in `[src/mllm_code/config/database_config.py](src/mllm_code/config/database_config.py)`.
+**Qdrant (vector database)**  
+Configured in `[src/mllm/config/database_config.py](src/mllm/config/database_config.py)`.
 
 - `QDRANT_HOST` – host for Qdrant (e.g., `localhost` or cloud endpoint)
 - `QDRANT_PORT` – port (default `6333` if unset)
@@ -76,28 +78,34 @@ Configured in `[src/mllm_code/config/database_config.py](src/mllm_code/config/da
 
 **LLM / API keys**
 
-Used across `captions_generate.py`, `evaluation.py`, and RAG code.
+Used across `mllm/captions_generate.py`, `mllm/evaluation.py`, and the RAG code.
 
 - `NVIDIA_API_KEY` – for LLaMA / Kosmos calls via NVIDIA API
 - `GOOGLE_API_KEY` – for Gemini caption evaluation
-- `DEEPSEEK_API_KEY` – for DeepSeek in `rag_pipeline.py` and `agentic_rag.py`
+- `DEEPSEEK_API_KEY` – for DeepSeek in `rag/rag_pipeline.py` and `rag/agentic_rag.py`
 
 **Prompt version**
 
 - `PROMPT_VERSION` – which prompt variant to use (`v4`, `v5`, `v6`, `v7`, …).  
-  The module `src/mllm_code/prompts.py` reads this and routes to the matching
-  prompt file under `src/mllm_code/prompts/`. `validate_env()` enforces that
-  this variable is set.
+  The module `src/mllm/prompts/__init__.py` reads this and routes to the matching
+  prompt file under `src/mllm/prompts/`. `validate_env()` enforces that this variable is set.
+
+  **Adding a new prompt version**: The router auto-discovers all `prompts_v*.py` files in
+  `src/mllm/prompts/`. To add a new version:
+  1. Create `src/mllm/prompts/prompts_v<N>.py` (must define `system_prompt`; optionally
+     `questions` and `multi_shot_examples`).
+  2. Set `PROMPT_VERSION=v<N>` in your `.env`.
+  3. No code changes to `__init__.py` are needed — the router will automatically find
+     and load your new version.
 
 ### 3. Environment validation (`validate_env()`)
 
 Most main entry points call `validate_env()` from
-`[src/mllm_code/config/__init__.py](src/mllm_code/config/__init__.py)`
-before doing any work:
+`[src/mllm/config/__init__.py](src/mllm/config/__init__.py)` before doing any work:
 
-- `captions_pipeline.py` – captions generation
-- `vectorization_pipeline.py` – caption embeddings → Qdrant
-- `rag_pipeline.py` – RAG over captions
+- `mllm/main/captions_pipeline.py` – captions generation
+- `mllm/main/vectorization_pipeline.py` – caption embeddings → Qdrant
+- `rag/rag_pipeline.py` – RAG over captions
 
 If any required variable is missing, you will see an error like:
 
@@ -113,4 +121,3 @@ Please set them in your .env file or shell environment.
 ```
 
 Fix your `.env` file accordingly and rerun the command.
-

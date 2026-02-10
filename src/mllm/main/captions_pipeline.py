@@ -1,9 +1,9 @@
 import os
-from mllm_code.captions_generate import Captions
+from mllm.captions_generate import Captions
 from dotenv import load_dotenv
-from mllm_code.prompts import questions
-from mllm_code.config.settings import mllm_model, USE_NDVI, USE_UDM
-from mllm_code.config import validate_env
+from mllm.prompts import questions
+from mllm.config.settings import mllm_model, USE_NDVI, USE_UDM
+from mllm.config import validate_env
 load_dotenv()
 
 # Validate required environment variables before running

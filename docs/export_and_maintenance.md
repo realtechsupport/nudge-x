@@ -11,7 +11,7 @@ This document explains how to:
 ## 1. Export captions by `run_id`
 
 **Script**:  
-`[src/mllm_code/export_captions.py](src/mllm_code/export_captions.py)`
+`[src/mllm/export_captions.py](src/mllm/export_captions.py)`
 
 ### What it does
 
@@ -32,7 +32,7 @@ This document explains how to:
 From `src/`:
 
 ```bash
-python -m mllm_code.export_captions --list-runs
+python -m mllm.export_captions --list-runs
 ```
 
 This prints recent `run_id` values with metadata from `caption_pipeline_runs`,
@@ -47,7 +47,7 @@ Recent pipeline runs:
 ### Export accepted captions for a run
 
 ```bash
-python -m mllm_code.export_captions <run_id>
+python -m mllm.export_captions <run_id>
 ```
 
 By default, the script writes to:
@@ -69,7 +69,7 @@ Wrote 120 captions to data/frontend_captions/captions_123e4567_2026-02-09.tsv
 You can override the default filename and directory:
 
 ```bash
-python -m mllm_code.export_captions <run_id> --output /path/to/output.tsv
+python -m mllm.export_captions <run_id> --output /path/to/output.tsv
 ```
 
 The script creates the directory if it does not exist.
@@ -79,7 +79,7 @@ The script creates the directory if it does not exist.
 ## 2. Reset embeddings and Qdrant captions collection
 
 **Script**:  
-`[src/mllm_code/database_pipeline/delete_captions.py](src/mllm_code/database_pipeline/delete_captions.py)`
+`[src/database_pipeline/delete_captions.py](src/database_pipeline/delete_captions.py)`
 
 ### What it does
 
@@ -96,7 +96,7 @@ It does **not** delete the main `captions` table; your captions remain intact.
 From `src/`:
 
 ```bash
-python -m mllm_code.database_pipeline.delete_captions
+python -m database_pipeline.delete_captions
 ```
 
 The script:
@@ -115,7 +115,7 @@ Resetting PostgreSQL embedding tracking...
 Reset PostgreSQL: Cleared 120 rows from caption_embeddings table.
 
 Next step: Re-run vectorization to re-embed with metadata:
-   python -m mllm_code.main.vectorization_pipeline
+   python -m mllm.main.vectorization_pipeline
 ```
 
 ### When to use this script
@@ -133,7 +133,7 @@ After running this script, the usual sequence is:
 
    ```bash
    cd src
-   python -m mllm_code.main.vectorization_pipeline
+   python -m mllm.main.vectorization_pipeline
    ```
 
 3. Optionally verify Qdrant (`captions_collection`) now has fresh points.
