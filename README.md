@@ -4,7 +4,7 @@
 <br><br>
 
 <p align="center">
-  <img src="https://github.com/realtechsupport/nudge-x/blob/main/Rotating-Earth.png?raw=true" alt="Mining sitesin project Nudge"/>
+<img src="https://github.com/realtechsupport/nudge-x/blob/main/Rotating-Earth.png?raw=true" alt="Mining sitesin project Nudge"/>
 </p>
 This repository contains the code, documents and documentation required for project NUDGE, inspired by Scrapyard AI. 
 <br>
