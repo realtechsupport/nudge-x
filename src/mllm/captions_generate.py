@@ -7,7 +7,7 @@ import json
 import time
 from typing import List, Tuple, Optional
 from mllm.prompts import system_prompt, questions, multi_shot_examples
-from sentinel.mllm_helper import (
+from eo.mllm_helper import (
     LlamaPromptGenerator_mines, LlamaCaptionGenerator, KosmosPromptGenerator,
     KosmosCaptionGenerator, find_matching_auxiliary_images, compress_image,
     has_metadata_for_image,

@@ -61,7 +61,7 @@ All project data lives under `data/`; metadata CSVs and TSVs are in `data/metada
 - `IMAGE_DIR` – path to satellite images, either:
   - local folder (e.g., `/home/you/data/images`), or
   - GCS path (e.g., `gs://nudge-bucket/path/to/images`)
-- `METADATA_CSV` – path to the mines metadata CSV used by `src/sentinel/mllm_helper.py`
+- `METADATA_CSV` – path to the mines metadata CSV used by `src/eo/mllm_helper.py`
   (e.g., `data/metadata/Mines_Metadata_v26.csv`)
 
 **Qdrant (vector database)**  

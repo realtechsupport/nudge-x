@@ -87,10 +87,10 @@ flowchart TD
 ### Where to look when modifying the system
 
 - **Changing how images are mapped to mines / metadata**  
-  - `src/sentinel/mllm_helper.py` (metadata lookup and prompt construction)
+  - `src/eo/mllm_helper.py` (metadata lookup and prompt construction)
 - **Changing satellite image processing or OpenEO operations**  
-  - `src/sentinel/prepare_openeo.py` (OpenEO image preparation)
-  - `src/sentinel/utilities.py` (satellite image utilities)
+  - `src/eo/prepare_openeo.py` (OpenEO image preparation)
+  - `src/eo/utilities.py` (satellite image utilities)
 - **Changing how captions are generated or evaluated**  
   - `src/mllm/captions_generate.py` (LLaMA prompt & evaluation loop)  
   - `src/mllm/evaluation.py` (Gemini / Anthropic judge)
