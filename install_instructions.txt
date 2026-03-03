@@ -31,7 +31,7 @@ MacOS/Linux:
 source /opt/your_venv_name/bin/activate
 
 # 1) Install lightweight CPU-only torch first (avoids large CUDA wheels)
-python3 -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
+sudo /opt/nudge_venv/bin/python3 -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
 
 # 2) Then install the rest of the dependencies
 pip install -r requirements.txt
@@ -122,6 +122,7 @@ You can run SQL commands like (always end with a semicolon):
 
 SELECT COUNT(*) FROM captions;
 SELECT * FROM caption_pipeline_runs ORDER BY created_at DESC LIMIT 5;
+
 
 
 
