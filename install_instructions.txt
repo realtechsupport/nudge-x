@@ -27,11 +27,12 @@ Make sure to create your own .env file. The template is found in .env.example fi
 Make sure to add your_venv_name into .gitignore
 
 MacOS/Linux:
+activate the environment if it is not already active
 (check the name and location of the venv in the setup.sh file)
-source /opt/your_venv_name/bin/activate
+source /nudge-x/venv/bin/activate
 
 # 1) Install lightweight CPU-only torch first (avoids large CUDA wheels)
-sudo /opt/nudge_venv/bin/python3 -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
+python3 -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
 
 # 2) Then install the rest of the dependencies
 pip install -r requirements.txt
@@ -122,6 +123,7 @@ You can run SQL commands like (always end with a semicolon):
 
 SELECT COUNT(*) FROM captions;
 SELECT * FROM caption_pipeline_runs ORDER BY created_at DESC LIMIT 5;
+
 
 
 
