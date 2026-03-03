@@ -14,7 +14,7 @@ cd to nudge-x
 
 Then run these commands:
 git sparse-checkout init --cone
-git sparse-checkout set --no-cone /src /data /docs /.env.example /.gitignore /README.md
+git sparse-checkout set --no-cone /src /data /docs /.env.example /.gitignore /README.md /requirements.txt
 git checkout main
 
 +you should see this statement after success ful checkout: 
@@ -126,6 +126,7 @@ You can run SQL commands like (always end with a semicolon):
 
 SELECT COUNT(*) FROM captions;
 SELECT * FROM caption_pipeline_runs ORDER BY created_at DESC LIMIT 5;
+
 
 
 
