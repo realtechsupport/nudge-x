@@ -283,6 +283,52 @@ def fetch_captions_without_embeddings(limit: int = 50):
             conn.close()
 
 
+def fetch_stale_embedding_caption_ids(limit: int = 500) -> List[int]:
+    """
+    Return caption IDs whose embeddings are considered stale.
+
+    A caption is treated as stale if:
+      - it is accepted AND
+      - embedding_added = TRUE in caption_embeddings AND
+      - there exists a *newer* accepted caption with the same filename.
+
+    These represent older embeddings that should be deleted from Qdrant so that
+    only embeddings for the latest accepted captions per image remain.
+    """
+    conn = connect_db()
+    if conn is None:
+        return []
+
+    try:
+        cursor = conn.cursor()
+        query = """
+            SELECT ce.caption_id
+            FROM caption_embeddings ce
+            JOIN captions c ON ce.caption_id = c.id
+            WHERE c.is_accepted = TRUE
+              AND ce.embedding_added = TRUE
+              AND EXISTS (
+                  SELECT 1
+                  FROM captions c2
+                  WHERE c2.filename = c.filename
+                    AND c2.is_accepted = TRUE
+                    AND c2.created_at > c.created_at
+              )
+            ORDER BY c.created_at DESC
+            LIMIT %s;
+        """
+        cursor.execute(query, (limit,))
+        rows = cursor.fetchall()
+        return [row[0] for row in rows]
+    except Exception as e:
+        print(f"Error fetching stale embedding caption IDs: {e}")
+        return []
+    finally:
+        if conn:
+            cursor.close()
+            conn.close()
+
+
 def mark_embeddings_added(caption_ids: List[int]):
     """
     Marks embeddings as added for the provided caption IDs.

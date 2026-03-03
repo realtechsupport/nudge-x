@@ -32,22 +32,22 @@ from images, to captions, to embeddings, to question‑answering and exports.
 
 ```mermaid
 flowchart TD
-  images[\"Images (IMAGE_DIR or GCS)\"] --> captionsPipeline[\"captions_pipeline (captions_pipeline.py)\"] 
-  captionsPipeline --> captionsDB[\"PostgreSQL: captions table\"]
-  captionsPipeline --> runsDB[\"PostgreSQL: caption_pipeline_runs\"]
+  images["Images - IMAGE_DIR or GCS"] --> captionsPipeline["captions_pipeline.py"]
+  captionsPipeline --> captionsDB["PostgreSQL: captions table"]
+  captionsPipeline --> runsDB["PostgreSQL: caption_pipeline_runs"]
 
-  captionsDB --> vectorization[\"vectorization_pipeline (vectorization_pipeline.py)\"] 
-  vectorization --> captionEmbeds[\"PostgreSQL: caption_embeddings\"]
-  vectorization --> qdrantCaptions[\"Qdrant: captions_collection\"]
+  captionsDB --> vectorization["vectorization_pipeline.py"]
+  vectorization --> captionEmbeds["PostgreSQL: caption_embeddings"]
+  vectorization --> qdrantCaptions["Qdrant: captions_collection"]
 
-  documents[\"PDF/TXT/MD docs\"] --> docIngest[\"document_ingestion (document_ingestion.py)\"] 
-  docIngest --> qdrantDocs[\"Qdrant: documents collection\"]
+  documents["PDF / TXT / MD docs"] --> docIngest["document_ingestion.py"]
+  docIngest --> qdrantDocs["Qdrant: documents collection"]
 
-  qdrantCaptions --> rag[\"RAG (rag_pipeline.py)\"] 
-  captionsDB --> exportCaptions[\"export_captions.py\"] 
+  qdrantCaptions --> rag["rag_pipeline.py"]
+  captionsDB --> exportCaptions["export_captions.py"]
   runsDB --> exportCaptions
 
-  qdrantCaptions --> agenticRag[\"Agentic RAG (agentic_rag.py)\"] 
+  qdrantCaptions --> agenticRag["agentic_rag.py"]
   qdrantDocs --> agenticRag
 ```
 

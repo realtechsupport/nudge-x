@@ -11,6 +11,7 @@ from mllm.config.database_config import (
 from database_pipeline.database_operations import (
     fetch_captions_without_embeddings,
     mark_embeddings_added,
+    fetch_stale_embedding_caption_ids,
 )
 from database_pipeline.vector_db_operations import (
     create_qdrant_client,
@@ -18,6 +19,7 @@ from database_pipeline.vector_db_operations import (
     create_qdrant_client_api,
     initialize_embedding_model,
     add_captions_to_vector_db,
+    delete_points_by_caption_id,
 )
 from mllm.config import validate_env
 
@@ -50,6 +52,15 @@ def main():
         qdrant_host = os.getenv("QDRANT_HOST", "localhost")
         qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
         client = create_qdrant_client(host=qdrant_host, port=qdrant_port)
+
+    # Remove stale embeddings for images that have newer accepted captions
+    stale_ids = fetch_stale_embedding_caption_ids(limit=500)
+    if stale_ids:
+        print(f"Found {len(stale_ids)} stale caption embedding(s). Deleting from Qdrant...")
+        for caption_id in stale_ids:
+            delete_points_by_caption_id(client, collection_name, caption_id)
+    else:
+        print("No stale caption embeddings found.")
 
     # Fetch accepted captions that do not yet have embeddings
     pending = fetch_captions_without_embeddings(limit=500)

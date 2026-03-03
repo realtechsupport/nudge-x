@@ -47,7 +47,7 @@ Uses `[src/mllm/captions_generate.py](src/mllm/captions_generate.py)`.
   - Scans the folder for `.png`, `.jpg`, `.jpeg`.
   - Filters to RGB images using the same naming pattern.
 
-In both cases, **only RGB images with non-empty metadata are processed**: the pipeline looks up the mine name (from the filename, e.g. `MineName_rgb_2024-09-13.png`) in the `METADATA_CSV` file. An image is processed only if there is a matching row **and** the `metadata` column in that row is not empty. Images with no match or empty metadata are ignored, and a count of skipped images is printed at startup.
+In both cases, **only RGB images with non-empty metadata are processed**: the pipeline looks up the mine name (from the filename, e.g. `MineName_rgb_2024-09-13.png`) in the `METADATA_TSV` file. An image is processed only if there is a matching row **and** the `metadata` column in that row is not empty. Images with no match or empty metadata are ignored, and a count of skipped images is printed at startup.
 
 ### Command
 

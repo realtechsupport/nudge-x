@@ -15,8 +15,28 @@ from mllm.prompts import system_prompt, multi_shot_examples
 
 load_dotenv()
 
-metadata_csv = os.getenv('METADATA_CSV')
-metadata_df = pd.read_csv(metadata_csv)
+metadata_tsv = os.getenv("METADATA_TSV")
+if not metadata_tsv:
+    raise ValueError("METADATA_TSV environment variable is not set.")
+
+# Read TSV metadata (tab-separated)
+metadata_df = pd.read_csv(metadata_tsv, sep="\t")
+
+# Normalize column names so code can work with both old and new schemas.
+# Old (v25-v26): Mine name, Site, Country, Lat/Long
+# New (v27+):    mine_name, site_location, country, gps_coordinates
+rename_map = {}
+if "Mine name" in metadata_df.columns:
+    rename_map["Mine name"] = "mine_name"
+if "Site" in metadata_df.columns:
+    rename_map["Site"] = "site_location"
+if "Country" in metadata_df.columns:
+    rename_map["Country"] = "country"
+if "Lat/Long" in metadata_df.columns:
+    rename_map["Lat/Long"] = "gps_coordinates"
+
+if rename_map:
+    metadata_df = metadata_df.rename(columns=rename_map)
 
 def compress_image(image_path_or_image, max_size=(512,512), quality=70):
     """Compress image from file path or PIL Image object."""
@@ -140,12 +160,15 @@ def get_metadata_description(mine_name: str, silent: bool = False) -> tuple:
     """
     mine_name = mine_name.strip().lower()
     for idx, row in metadata_df.iterrows():
-        if mine_name in row['Mine name'].lower():
+        # Handle missing/NaN values robustly
+        candidate = str(row.get("mine_name") or "").strip().lower()
+        if not candidate or mine_name not in candidate:
+            continue
             if not silent:
                 print("Metadata found for this mine.")
-            country = row['Country']
-            location = row['Site']
-            desc = row['metadata']
+            country = row.get("country")
+            location = row.get("site_location")
+            desc = row.get("metadata")
             # Normalize NaN or empty string to None
             if pd.isna(desc) or str(desc).strip() == "":
                 desc = None
@@ -162,9 +185,9 @@ def get_metadata_description(mine_name: str, silent: bool = False) -> tuple:
                 except (ValueError, TypeError):
                     pass
             
-            # If not available, try to parse the combined Lat/Long column
-            if latitude is None and 'Lat/Long' in row and pd.notna(row.get('Lat/Long')):
-                lat_long_str = str(row['Lat/Long']).strip().strip('"\'')
+            # If not available, try to parse the combined GPS column
+            if latitude is None and "gps_coordinates" in row and pd.notna(row.get("gps_coordinates")):
+                lat_long_str = str(row["gps_coordinates"]).strip().strip('"\'')
                 if ',' in lat_long_str:
                     parts = lat_long_str.split(',')
                     if len(parts) == 2:
@@ -183,7 +206,7 @@ def get_metadata_description(mine_name: str, silent: bool = False) -> tuple:
 
 def has_metadata_for_image(image_path: str) -> bool:
     """
-    Return True if this RGB image has a matching row in the metadata CSV.
+    Return True if this RGB image has a matching row in the metadata TSV.
 
     Uses parse_rgb_image_name to get mine name from filename (minename_rgb_date.png),
     then get_metadata_description to check for metadata. Images without metadata

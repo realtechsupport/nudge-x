@@ -19,7 +19,7 @@ from mllm.config.database_config import (
 from database_pipeline.vector_db_operations import (
     create_qdrant_client, create_qdrant_client_api, create_qdrant_client_testing
 )
-from mllm.config.settings import DEEPSEEK_MODEL
+from mllm.config.settings import DEEPSEEK_MODEL, RAG_LLM
 
 load_dotenv()
 
@@ -60,11 +60,13 @@ class AgenticRAG:
         llm_model: str = DEEPSEEK_MODEL,
         max_iterations: int = 2,
         client: Optional[QdrantClient] = None,
+        llm_provider: str = RAG_LLM,
     ):
         self.caption_collection = caption_collection
         self.document_collection = document_collection
         self.llm_model = llm_model
         self.max_iterations = max_iterations
+        self.llm_provider = (llm_provider or "deepseek").strip().lower()
         
         # Initialize Qdrant client
         if client:
@@ -301,8 +303,41 @@ class AgenticRAG:
     # GENERATION
     # -------------------------
     
+    def _call_deepseek(self, messages: List[Dict[str, str]], temperature: float) -> str:
+        """Call DeepSeek chat completions API with the given messages."""
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise ValueError("DEEPSEEK_API_KEY not set")
+        
+        response = requests.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            },
+            json={
+                "model": self.llm_model,
+                "messages": messages,
+                "temperature": temperature,
+            },
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+
+    def _call_llm(self, messages: List[Dict[str, str]], temperature: float) -> str:
+        """
+        Dispatch LLM calls based on llm_provider.
+
+        Currently supports: \"deepseek\". To add another provider, implement
+        a _call_<name>() method and extend this dispatcher.
+        """
+        provider = (self.llm_provider or "deepseek").strip().lower()
+        if provider == "deepseek":
+            return self._call_deepseek(messages, temperature=temperature)
+        raise ValueError(f"Unsupported RAG_LLM '{provider}'. Currently supported: deepseek")
+
     def _generate_answer(self, query: str, context: str) -> str:
-        """Generate answer using DeepSeek."""
+        """Generate answer using the configured LLM (DeepSeek by default)."""
         system_prompt = """You are an expert on mining and Indigenous communities. Answer questions directly as a knowledgeable expert would.
 
 STRICT RULES - VIOLATIONS WILL BE REJECTED:
@@ -328,27 +363,11 @@ Question: {query}
 
 Write a direct, natural answer in plain prose. No headers, no source references, no "based on evidence" phrases."""
 
-        api_key = os.getenv("DEEPSEEK_API_KEY")
-        if not api_key:
-            raise ValueError("DEEPSEEK_API_KEY not set")
-        
-        response = requests.post(
-            "https://api.deepseek.com/chat/completions",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}"
-            },
-            json={
-                "model": self.llm_model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                "temperature": 0.7
-            }
-        )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        return self._call_llm(messages, temperature=0.7)
     
     # -------------------------
     # SELF-EVALUATION
@@ -392,21 +411,10 @@ Answer: {answer}
 Respond with only "SUFFICIENT" or "INSUFFICIENT: <reason>"."""
 
         try:
-            api_key = os.getenv("DEEPSEEK_API_KEY")
-            response = requests.post(
-                "https://api.deepseek.com/chat/completions",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
-                },
-                json={
-                    "model": self.llm_model,
-                    "messages": [{"role": "user", "content": eval_prompt}],
-                    "temperature": 0.1
-                }
-            )
-            response.raise_for_status()
-            eval_result = response.json()["choices"][0]["message"]["content"].strip()
+            messages = [
+                {"role": "user", "content": eval_prompt},
+            ]
+            eval_result = self._call_llm(messages, temperature=0.1).strip()
             
             if eval_result.startswith("SUFFICIENT"):
                 return True, "LLM evaluation: sufficient"

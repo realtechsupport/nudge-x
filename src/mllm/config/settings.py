@@ -54,3 +54,9 @@ DEFAULT_WEIGHTS = {
 }
 
 DEEPSEEK_MODEL = "deepseek-chat"
+
+# --- RAG LLM Selection ---
+# Controls which LLM implementation RAG pipelines use.
+# Currently supported: "deepseek". To add another, implement a corresponding
+# function in the RAG modules and set RAG_LLM accordingly.
+RAG_LLM = (os.getenv("RAG_LLM") or "deepseek").strip().lower()

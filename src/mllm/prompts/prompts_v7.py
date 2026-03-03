@@ -103,3 +103,7 @@ Answer: The Sentinel-2 image data from August 28, 2024, shows the Tiébaghi Mine
 Question: Which environmental hazards are present in the Sentinel-2 satellite image data of: Kafang Mine, China, December 1, 2024?
 Answer: This Sentinel-2 image data from December 1, 2024, shows the Kafang Mine in Yunnan, China, a major copper–tin operation. The imagery reveals a large open pit surrounded by bare and disturbed land, with a waterbody within the pit, possibly indicating mining-related water accumulation or tailings management. There is vegetation stress and loss around the mine, with red areas indicating sparse or absent vegetation. No urban development is detectable in the data. The mining footprint is substantial, with land degradation and potential chemical contamination risks associated with copper and tin extraction. Heavy metal contamination of soils and groundwater, as documented in previous studies, poses ongoing health risks to nearby communities.
 """
+
+questions = [
+    "Which environmental hazards are present in this Sentinel-2 satellite image?",
+]

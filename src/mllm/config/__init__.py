@@ -17,7 +17,7 @@ REQUIRED_ENV_VARS = [
     ("QDRANT_HOST", "Qdrant server host"),
     ("QDRANT_PORT", "Qdrant server port"),
     ("QDRANT_MODE", "Qdrant mode (production/api/testing)"),
-    ("METADATA_CSV", "Path to the mines metadata CSV file"),
+    ("METADATA_TSV", "Path to the mines metadata TSV file"),
     ("IMAGE_DIR", "Path to satellite images (local or gs://)"),
     ("NVIDIA_API_KEY", "NVIDIA API key for LLaMA model"),
     ("GOOGLE_API_KEY", "Google API key for Gemini evaluation"),

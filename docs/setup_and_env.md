@@ -56,13 +56,13 @@ Used by `[src/database_pipeline/database_operations.py](src/database_pipeline/da
 
 **Image and metadata paths**
 
-All project data lives under `data/`; metadata CSVs and TSVs are in `data/metadata/`.
+All project data lives under `data/`; metadata TSVs are in `data/metadata/`.
 
 - `IMAGE_DIR` – path to satellite images, either:
   - local folder (e.g., `/home/you/data/images`), or
   - GCS path (e.g., `gs://nudge-bucket/path/to/images`)
-- `METADATA_CSV` – path to the mines metadata CSV used by `src/eo/mllm_helper.py`
-  (e.g., `data/metadata/Mines_Metadata_v26.csv`)
+- `METADATA_TSV` – path to the mines metadata TSV used by `src/eo/mllm_helper.py`
+  (e.g., `data/metadata/Mines_Metadata_v28.tsv`)
 
 **Qdrant (vector database)**  
 Configured in `[src/mllm/config/database_config.py](src/mllm/config/database_config.py)`.
@@ -83,6 +83,7 @@ Used across `mllm/captions_generate.py`, `mllm/evaluation.py`, and the RAG code.
 - `NVIDIA_API_KEY` – for LLaMA / Kosmos calls via NVIDIA API
 - `GOOGLE_API_KEY` – for Gemini caption evaluation
 - `DEEPSEEK_API_KEY` – for DeepSeek in `rag/rag_pipeline.py` and `rag/agentic_rag.py`
+- `RAG_LLM` – optional selector for which LLM implementation RAG uses (default: `deepseek`)
 
 **Prompt version**
 
@@ -92,11 +93,38 @@ Used across `mllm/captions_generate.py`, `mllm/evaluation.py`, and the RAG code.
 
   **Adding a new prompt version**: The router auto-discovers all `prompts_v*.py` files in
   `src/mllm/prompts/`. To add a new version:
-  1. Create `src/mllm/prompts/prompts_v<N>.py` (must define `system_prompt`; optionally
-     `questions` and `multi_shot_examples`).
+  1. Create `src/mllm/prompts/prompts_v<N>.py`.
   2. Set `PROMPT_VERSION=v<N>` in your `.env`.
   3. No code changes to `__init__.py` are needed — the router will automatically find
      and load your new version.
+
+  **Required variables in each prompt file**:
+
+  Every `prompts_v<N>.py` file should define the following variables:
+
+  - **`system_prompt`** (str, required) — The system-level instruction sent to the LLM.
+    This steers the model's behaviour, tone, and output format.
+  - **`questions`** (list of str, required) — One or more questions to ask about each
+    image. The captions pipeline generates one caption per question per image.
+    If this is missing or empty, **no captions will be generated**.
+  - **`multi_shot_examples`** (str, recommended) — Example question/answer pairs that
+    the LLM uses as style references. If omitted, defaults to an empty string.
+
+  Example skeleton for a new version:
+
+  ```python
+  # prompts_v8.py
+  system_prompt = """You are an expert environmental analyst..."""
+
+  multi_shot_examples = """
+  Question: ...
+  Answer: ...
+  """
+
+  questions = [
+      "Which environmental hazards are present in this Sentinel-2 satellite image?",
+  ]
+  ```
 
 ### 3. Environment validation (`validate_env()`)
 

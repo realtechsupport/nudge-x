@@ -114,7 +114,7 @@ class Captions:
             # Filter to only RGB images for primary processing
             self.image_files = self._filter_rgb_images(self.all_image_files)
 
-        # Only process images that have metadata in METADATA_CSV; ignore the rest
+        # Only process images that have metadata in METADATA_TSV; ignore the rest
         before = len(self.image_files)
         self.image_files = [p for p in self.image_files if has_metadata_for_image(p)]
         skipped = before - len(self.image_files)
@@ -123,7 +123,7 @@ class Captions:
         if not self.image_files:
             raise ValueError(
                 f"No RGB images with metadata found in {images_folder_path}. "
-                "Expected naming: minename_rgb_date.png and mine name must match a row in METADATA_CSV."
+                "Expected naming: minename_rgb_date.png and mine name must match a row in METADATA_TSV."
             )
         
     def _list_gcs_images(self):

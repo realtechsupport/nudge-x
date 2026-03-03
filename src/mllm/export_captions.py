@@ -10,6 +10,7 @@ Usage:
 import argparse
 import csv
 import os
+import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -67,6 +68,29 @@ def run_exists(run_id: str) -> bool:
             (run_id,),
         )
         return cursor.fetchone() is not None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_run_prompt_version(run_id: str) -> str | None:
+    """Fetch the prompt_version stored for a given pipeline run."""
+    conn = connect_db()
+    if conn is None:
+        return None
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT prompt_version
+            FROM caption_pipeline_runs
+            WHERE run_id = %s;
+            """,
+            (run_id,),
+        )
+        row = cursor.fetchone()
+        return row[0] if row else None
     finally:
         cursor.close()
         conn.close()
@@ -162,6 +186,20 @@ def main() -> None:
         print(f"Error: run_id '{run_id}' does not exist.")
         sys.exit(1)
 
+    # Determine prompt version tag from DB
+    raw_prompt_version = get_run_prompt_version(run_id) or ""
+    prompt_version_norm = raw_prompt_version.strip().lower()
+    if prompt_version_norm.startswith("v"):
+        prompt_version_norm = prompt_version_norm[1:]
+    prompt_tag = f"promptv{prompt_version_norm}" if prompt_version_norm else "prompt"
+
+    # Determine metadata version tag from METADATA_TSV env var (e.g., Mines_Metadata_v28.tsv -> metadataV28)
+    metadata_path = os.getenv("METADATA_TSV", "")
+    meta_tag = "metadata"
+    match = re.search(r"[Vv](\d+)", metadata_path)
+    if match:
+        meta_tag = f"metadataV{match.group(1)}"
+
     rows = fetch_captions(run_id)
     output_path = args.output
     if not output_path:
@@ -170,7 +208,10 @@ def main() -> None:
         # Resolve project root (two levels up from this file: src/mllm/...)
         project_root = Path(__file__).resolve().parents[2]
         default_dir = project_root / "data" / "frontend_captions"
-        output_path = str(default_dir / f"captions_{short_id}_{today}.tsv")
+        output_path = str(
+            default_dir
+            / f"captions_{prompt_tag}_{meta_tag}_{short_id}_{today}.tsv"
+        )
 
     count = write_tsv(rows, output_path)
     print(f"Wrote {count} captions to {output_path}")

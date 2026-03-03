@@ -17,7 +17,7 @@ from database_pipeline.vector_db_operations import (
     create_qdrant_client_testing,
     create_qdrant_client_api,
 )
-from mllm.config.settings import DEEPSEEK_MODEL
+from mllm.config.settings import DEEPSEEK_MODEL, RAG_LLM
 from mllm.config import validate_env
 load_dotenv()
 
@@ -192,6 +192,19 @@ captions, images, prompts, tools, internal IDs, or your reasoning; return only t
         except requests.exceptions.RequestException as e:
             return f"An error occurred during API call: {e}"
 
+    def generate_response(self, query: str, context: str, model_name: str, context_items: list | None = None):
+        """
+        Dispatch to the appropriate LLM implementation based on RAG_LLM.
+
+        Currently supported: \"deepseek\" (default). To add another LLM, implement
+        a corresponding generate_response_<name>() method and extend this
+        dispatcher.
+        """
+        llm = (RAG_LLM or "deepseek").strip().lower()
+        if llm == "deepseek":
+            return self.generate_response_deepseek(query, context, model_name, context_items=context_items)
+        raise ValueError(f\"Unsupported RAG_LLM '{llm}'. Currently supported: deepseek\")
+
     def generate_response_without_rag(self, query: str, model_name: str):
         system_prompt = "You are a helpful assistant. Answer the user's questions based on your knowledge within 100 words."
 
@@ -256,14 +269,12 @@ if __name__ == "__main__":
         
         # Retrieval step: find relevant chunks and images
         retrieved_context, retrieved_items = rag.retrieve_context(user_query)
-       
-        
-        # Generation step: get the LLM's answer
-        llm_response = rag.generate_response_deepseek(
+        # Generation step: get the LLM's answer via dispatcher
+        llm_response = rag.generate_response(
             user_query,
             retrieved_context,
             model_name=DEEPSEEK_MODEL,
-            context_items=retrieved_items
+            context_items=retrieved_items,
         )
         print(f"\nResponse:\n{llm_response}")
         print("-" * 50)
