@@ -1,6 +1,6 @@
 // SiteDisplay.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./SiteDisplay.css";
 
 function formatLabel(label) {
@@ -88,6 +88,7 @@ function TypewriterText({ text, speed = 50, onDone }) {
 
 export default function SiteDisplay() {
   const { state } = useLocation();
+  const navigate = useNavigate();
 
   // Fallback: direct URL / bad navigation
   if (!state) {
@@ -115,9 +116,18 @@ export default function SiteDisplay() {
       : "";
 
   // Prefix + blank line + caption
-  const fullCaptionText = `Llama4++ reports:\n\n${captionBody}`;
+  const fullCaptionText = `NUDGE reports:\n\n${captionBody}`;
 
   const [showBackIcon, setShowBackIcon] = useState(false);
+
+  // After caption is finished and back icon appears, auto-return to globe after 5s
+  useEffect(() => {
+    if (!showBackIcon) return;
+    const timeoutId = setTimeout(() => {
+      navigate("/");
+    }, 5000);
+    return () => clearTimeout(timeoutId);
+  }, [showBackIcon, navigate]);
   
   // --- NEW: mine, location, country title ---
   const mineTitle = formatLabel(site.mine);

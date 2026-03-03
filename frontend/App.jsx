@@ -22,7 +22,14 @@ import {
 } from "./siteData.js";
 
 
-function Globe() {
+function Globe({ autoSiteIndex, setAutoSiteIndex }) {
+  const AUTO_MINE_NAMES = [
+    "ShiluMine",
+    "SerraAzulMine",
+    "GarzweilerOpenPitMine",
+    "SprucePineQuarry",
+    "YallournOpenCut",
+  ];
   const mountRef = useRef(null);
   const navigate = useNavigate();
 
@@ -35,7 +42,10 @@ function Globe() {
   const cameraRef = useRef(null);
   const controlsRef = useRef(null);
   const clickableObjectsRef = useRef([]);
+  const autoTriggerRef = useRef(false);
+  const autoSitesRef = useRef([]);
   const animationFrameRef = useRef(null);
+  const rotationPausedRef = useRef(false);
 
   useEffect(() => {
     let aborted = false;
@@ -92,11 +102,14 @@ function Globe() {
     const globeSegments = 32;
     const globeGeometry = new THREE.SphereGeometry(globeRadius, globeSegments, globeSegments);
 
-    const solidGlobe = new THREE.Mesh(
+    let solidGlobe;
+    let wire;
+    let dotGroup;
+
+    solidGlobe = new THREE.Mesh(
       globeGeometry,
       new THREE.MeshBasicMaterial({ color: 0xffffff })
     );
-    scene.add(solidGlobe);
 
     const loader = new THREE.TextureLoader();
     loader.load(
@@ -104,10 +117,17 @@ function Globe() {
       (texture) => {
         solidGlobe.material.map = texture;
         solidGlobe.material.needsUpdate = true;
+        scene.add(solidGlobe);
+        if (wire) scene.add(wire);
+        if (dotGroup) scene.add(dotGroup);
       },
       undefined,
       (err) => {
         console.warn("Failed to load earth-continents-black.png:", err);
+        // If the texture fails, still show the globe and overlays
+        scene.add(solidGlobe);
+        if (wire) scene.add(wire);
+        if (dotGroup) scene.add(dotGroup);
       }
     );
 
@@ -119,38 +139,65 @@ function Globe() {
         height * window.devicePixelRatio
       ),
     });
-    const wire = new Wireframe(
+    wire = new Wireframe(
       new WireframeGeometry2(globeGeometry),
       wireMaterial
     );
-    scene.add(wire);
+    // scene.add(wire); // moved to texture onLoad
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controlsRef.current = controls;
 
-    const dotGroup = new THREE.Group();
+    dotGroup = new THREE.Group();
     const clickableObjects = [];
-    const dotGeometry = new THREE.SphereGeometry(0.025, 8, 8);
+    const DOT_RADIUS = 0.025;
+    const DOT_WIDTH_SEGMENTS = 16;
+    const DOT_HEIGHT_SEGMENTS = 16;
+    const dotGeometry = new THREE.SphereGeometry(
+      DOT_RADIUS,
+      DOT_WIDTH_SEGMENTS,
+      DOT_HEIGHT_SEGMENTS
+    );
+    // Flatten & shrink: 30% smaller diameter (X/Y) and 15% thickness along radial (Z)
+    dotGeometry.scale(0.66, 0.66, 0.25);
 
     siteData.forEach((site) => {
       const pos = latLonToVector3(site.lat, site.lon, globeRadius);
 
+      const baseColor = getColorForSeverity(site.severity);
       const mat = new THREE.MeshBasicMaterial({
-        color: getColorForSeverity(site.severity),
+        color: baseColor,
+        transparent: true,
+        opacity: 0.6,
       });
       const dot = new THREE.Mesh(dotGeometry, mat);
-
       dot.position.copy(pos);
       dot.userData = site;
       dot.lookAt(0, 0, 0);
+
+      // Determine if this site should be auto-triggered based on mine name list
+      const labelCombined = `${site.name || ""} ${site.mine || ""} ${site.mine_name || ""}`.toLowerCase();
+      const matchedIndex = AUTO_MINE_NAMES.findIndex((m) =>
+        labelCombined.includes(m.toLowerCase())
+      );
+      if (matchedIndex !== -1) {
+        const basePos = pos.clone();
+        const triggerAngle = Math.atan2(-basePos.x, basePos.z);
+        autoSitesRef.current.push({
+          dot,
+          site,
+          triggerAngle,
+          autoIndex: matchedIndex,
+        });
+      }
 
       dotGroup.add(dot);
       clickableObjects.push(dot);
     });
 
     clickableObjectsRef.current = clickableObjects;
-    scene.add(dotGroup);
+    // scene.add(dotGroup); // moved to texture onLoad
 
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -189,16 +236,94 @@ function Globe() {
     };
     window.addEventListener("resize", onWindowResize);
 
+    const tempAngleState = { lastAngle: null };
+
+    const checkAutoTrigger = () => {
+      if (autoTriggerRef.current) return;
+      const targets = autoSitesRef.current;
+      if (!targets || targets.length === 0) return;
+
+      const twoPi = Math.PI * 2;
+      const current = ((solidGlobe.rotation.y % twoPi) + twoPi) % twoPi;
+      const offset = 0.0; // no extra phase offset to avoid misalignment
+
+      const targetIndex = typeof autoSiteIndex === "number" ? autoSiteIndex : 0;
+
+      let chosenEntry = null;
+      let chosenDiff = Infinity;
+
+      for (const entry of targets) {
+        const { dot, site, triggerAngle, autoIndex } = entry;
+        if (autoIndex !== targetIndex) continue;
+        if (!dot || !dot.material || !dot.material.color) continue;
+
+        const target = (((triggerAngle + offset) % twoPi) + twoPi) % twoPi;
+        let diff = Math.abs(current - target);
+        diff = Math.min(diff, twoPi - diff);
+
+        if (diff < chosenDiff) {
+          chosenDiff = diff;
+          chosenEntry = entry;
+        }
+      }
+
+      // Use a slightly looser threshold so the trigger actually fires
+      const threshold = 0.08; // ~4.6 degrees
+      if (!chosenEntry || chosenDiff >= threshold) return;
+
+      const { dot, site } = chosenEntry;
+
+      autoTriggerRef.current = true;
+      rotationPausedRef.current = true;
+
+      // Advance to the next auto site for the next globe session
+      if (typeof setAutoSiteIndex === "function" && AUTO_MINE_NAMES.length > 0) {
+        setAutoSiteIndex((prev) => (prev + 1) % AUTO_MINE_NAMES.length);
+      }
+
+      const label = site.name || site.mine || "Selected Site";
+
+      const originalColor = dot.material.color.getHex();
+      const blinkOnColor = 0x0000ff;     //white: 0xffffff;
+      const blinkDurationMs = 2000;
+      const blinkIntervalMs = 125;
+      let elapsed = 0;
+      let isOn = false;
+
+      const intervalId = setInterval(() => {
+        isOn = !isOn;
+        dot.material.color.set(isOn ? blinkOnColor : originalColor);
+        elapsed += blinkIntervalMs;
+
+        if (elapsed >= blinkDurationMs) {
+          clearInterval(intervalId);
+          dot.material.color.set(originalColor);
+
+          requestAnimationFrame(() => {
+            navigate(`/site/${encodeURIComponent(label)}`, {
+              state: site,
+            });
+          });
+        }
+      }, blinkIntervalMs);
+    };
+
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
       const rotationSpeed = 0.0005;
-      solidGlobe.rotation.y += rotationSpeed;
+      if (!rotationPausedRef.current) {
+        solidGlobe.rotation.y += rotationSpeed;
+      }
       wire.rotation.y = solidGlobe.rotation.y;
       dotGroup.rotation.y = solidGlobe.rotation.y;
+
+      // Check if any auto-target mine is near its trigger angle
+      checkAutoTrigger();
+
       controls.update();
       renderer.render(scene, camera);
     };
-    animate();
+    animate();;
 
     return () => {
       cancelAnimationFrame(animationFrameRef.current);
@@ -237,11 +362,21 @@ function Globe() {
 }
 
 export default function App() {
+  const [autoSiteIndex, setAutoSiteIndex] = useState(0);
+
   return (
     <div className="w-full min-h-screen bg-black text-white">
       <Router>
         <Routes>
-          <Route path="/" element={<Globe />} />
+          <Route
+            path="/"
+            element={
+              <Globe
+                autoSiteIndex={autoSiteIndex}
+                setAutoSiteIndex={setAutoSiteIndex}
+              />
+            }
+          />
           <Route path="/site/:name" element={<SiteDisplay />} />
         </Routes>
       </Router>
