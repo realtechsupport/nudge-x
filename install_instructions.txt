@@ -6,13 +6,11 @@ Run the install script from root:
 sudo sh setup.sh
 
 -----------------------------
-Clone repo:
+activate the source (check setup.sh file for name)
 
-git clone --no-checkout https://github.com/realtechsupport/nudge-x.git
-Make sure you are in nudge-x Ex: your_username@nudge-x:~/nudge-x$
+source /nudge-x/venv/bin/activate
 
-cd nudge-x
-
+Then run these commands:
 git sparse-checkout init --cone
 git sparse-checkout set src data docs .env.example .gitignore README.md
 git checkout main
@@ -122,6 +120,7 @@ You can run SQL commands like (always end with a semicolon):
 
 SELECT COUNT(*) FROM captions;
 SELECT * FROM caption_pipeline_runs ORDER BY created_at DESC LIMIT 5;
+
 
 
 
