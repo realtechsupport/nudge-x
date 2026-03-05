@@ -17,7 +17,7 @@ REAL_USER=${SUDO_USER:-$(whoami)}
 
 # 1. Update system & Install packages
 apt-get update -y
-apt-get install -y python3 python3-venv python3-pip build-essential git nano
+apt-get install -y python3 python3-venv python3-pip build-essential git nano postgresql postgresql-contrib
 
 # 2. Setup Directory and Git Repo
 TARGET_DIR="/nudge-x"
