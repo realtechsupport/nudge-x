@@ -164,40 +164,40 @@ def get_metadata_description(mine_name: str, silent: bool = False) -> tuple:
         candidate = str(row.get("mine_name") or "").strip().lower()
         if not candidate or mine_name not in candidate:
             continue
-            if not silent:
-                print("Metadata found for this mine.")
-            country = row.get("country")
-            location = row.get("site_location")
-            desc = row.get("metadata")
-            # Normalize NaN or empty string to None
-            if pd.isna(desc) or str(desc).strip() == "":
-                desc = None
-            
-            # Get GPS coordinates - handle both separate and combined columns
-            latitude = None
-            longitude = None
-            
-            # First, try the separate Latitude/Longitude columns
-            if pd.notna(row.get('Latitude')) and pd.notna(row.get('Longitude')):
-                try:
-                    latitude = float(row['Latitude'])
-                    longitude = float(row['Longitude'])
-                except (ValueError, TypeError):
-                    pass
-            
-            # If not available, try to parse the combined GPS column
-            if latitude is None and "gps_coordinates" in row and pd.notna(row.get("gps_coordinates")):
-                lat_long_str = str(row["gps_coordinates"]).strip().strip('"\'')
-                if ',' in lat_long_str:
-                    parts = lat_long_str.split(',')
-                    if len(parts) == 2:
-                        try:
-                            latitude = float(parts[0].strip())
-                            longitude = float(parts[1].strip())
-                        except ValueError:
-                            pass
-            
-            return country, location, desc, latitude, longitude
+        if not silent:
+            print("Metadata found for this mine.")
+        country = row.get("country")
+        location = row.get("site_location")
+        desc = row.get("metadata")
+        # Normalize NaN or empty string to None
+        if pd.isna(desc) or str(desc).strip() == "":
+            desc = None
+
+        # Get GPS coordinates - handle both separate and combined columns
+        latitude = None
+        longitude = None
+
+        # First, try the separate Latitude/Longitude columns
+        if pd.notna(row.get('Latitude')) and pd.notna(row.get('Longitude')):
+            try:
+                latitude = float(row['Latitude'])
+                longitude = float(row['Longitude'])
+            except (ValueError, TypeError):
+                pass
+
+        # If not available, try to parse the combined GPS column
+        if latitude is None and "gps_coordinates" in row and pd.notna(row.get("gps_coordinates")):
+            lat_long_str = str(row["gps_coordinates"]).strip().strip('"\'')
+            if ',' in lat_long_str:
+                parts = lat_long_str.split(',')
+                if len(parts) == 2:
+                    try:
+                        latitude = float(parts[0].strip())
+                        longitude = float(parts[1].strip())
+                    except ValueError:
+                        pass
+
+        return country, location, desc, latitude, longitude
     
     if not silent:
         print("No metadata found for this mine.")
