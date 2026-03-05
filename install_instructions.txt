@@ -38,7 +38,8 @@ python3 -m pip install --no-cache-dir --index-url https://download.pytorch.org/w
 pip install -r requirements.txt
 
 
-#3) setup postgres database (see https://github.com/realtechsupport/nudge-x/blob/main/docs/database_setup.md)
+#3) setup postgres database 
+(see https://github.com/realtechsupport/nudge-x/blob/main/docs/database_setup.md)
 
 sudo systemctl start postgresql
 sudo systemctl enable postgresql
@@ -47,6 +48,7 @@ sudo systemctl status postgresql
 
 You should see a status result similar to this: Main PID: 123 (code=exited, status=0/SUCCESS)
 
+# update .env file with pqs credentials
 
 -----------------------------------------------------------------------------
 Quick reference: main pipelines (run from inside 'src')
@@ -124,6 +126,7 @@ You can run SQL commands like (always end with a semicolon):
 
 SELECT COUNT(*) FROM captions;
 SELECT * FROM caption_pipeline_runs ORDER BY created_at DESC LIMIT 5;
+
 
 
 
