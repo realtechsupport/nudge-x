@@ -190,6 +190,19 @@ def delete_points_by_caption_id(
     if client is None:
         raise ValueError("Qdrant client cannot be None.")
 
+    # Ensure there is an index on the caption_id payload field so that
+    # filter-based deletes work correctly on Qdrant Cloud.
+    try:
+        client.create_payload_index(
+            collection_name=collection_name,
+            field_name="caption_id",
+            field_schema=models.PayloadSchemaType.INTEGER,
+        )
+    except Exception:
+        # If the index already exists or the backend does not require it,
+        # we can safely ignore the error and proceed with deletion.
+        pass
+
     filt = models.Filter(
         must=[
             models.FieldCondition(
