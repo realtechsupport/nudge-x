@@ -203,7 +203,7 @@ captions, images, prompts, tools, internal IDs, or your reasoning; return only t
         llm = (RAG_LLM or "deepseek").strip().lower()
         if llm == "deepseek":
             return self.generate_response_deepseek(query, context, model_name, context_items=context_items)
-        raise ValueError(f\"Unsupported RAG_LLM '{llm}'. Currently supported: deepseek\")
+        raise ValueError(f"Unsupported RAG_LLM '{llm}'. Currently supported: deepseek")
 
     def generate_response_without_rag(self, query: str, model_name: str):
         system_prompt = "You are a helpful assistant. Answer the user's questions based on your knowledge within 100 words."
