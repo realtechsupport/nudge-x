@@ -75,6 +75,8 @@ class Captions:
         self.use_ndvi = use_ndvi
         self.use_udm = use_udm
         self.run_id: Optional[str] = None
+        # (filename, error_message)
+        self.failed_cases: List[Tuple[str, str]] = []
         
         # Log the image combination being used
         aux_images = []
@@ -227,16 +229,24 @@ class Captions:
                         # Pass blob_name (string path) to LlamaPromptGenerator for metadata extraction
                         prompt, location, basename, country, mine_name, latitude, longitude = LlamaPromptGenerator_mines(blob_name, question)
                         # Pass pil_image to LlamaCaptionGenerator for image processing
-                        caption = LlamaCaptionGenerator(
-                            pil_image, system_prompt, prompt,
-                            LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
-                            LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
-                            second_image_file_path_or_image=ndvi_image,
-                            third_image_file_path_or_image=udm_image,
-                            first_image_label="RGB",
-                            second_image_label="NDVI",
-                            third_image_label="UDM"
-                        )
+                        try:
+                            caption = LlamaCaptionGenerator(
+                                pil_image, system_prompt, prompt,
+                                LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
+                                LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
+                                second_image_file_path_or_image=ndvi_image,
+                                third_image_file_path_or_image=udm_image,
+                                first_image_label="RGB",
+                                second_image_label="NDVI",
+                                third_image_label="UDM"
+                            )
+                        except Exception as e:
+                            error_msg = str(e)
+                            print(
+                                f"[RUN_ID={self.run_id}] Caption generation FAILED for image '{basename}': {error_msg}"
+                            )
+                            self.failed_cases.append((basename, error_msg))
+                            continue
 
                         print("Evaluating caption...")
                         is_accepted = self.evaluation(caption)
@@ -260,16 +270,24 @@ class Captions:
                     for question in self.questions:
                         print(f"Processing image: {image_file}...")
                         prompt, location, basename, country, mine_name, latitude, longitude = LlamaPromptGenerator_mines(image_file, question)
-                        caption = LlamaCaptionGenerator(
-                            image_file, system_prompt, prompt,
-                            LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
-                            LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
-                            second_image_file_path_or_image=ndvi_path,
-                            third_image_file_path_or_image=udm_path,
-                            first_image_label="RGB",
-                            second_image_label="NDVI",
-                            third_image_label="UDM"
-                        )
+                        try:
+                            caption = LlamaCaptionGenerator(
+                                image_file, system_prompt, prompt,
+                                LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
+                                LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
+                                second_image_file_path_or_image=ndvi_path,
+                                third_image_file_path_or_image=udm_path,
+                                first_image_label="RGB",
+                                second_image_label="NDVI",
+                                third_image_label="UDM"
+                            )
+                        except Exception as e:
+                            error_msg = str(e)
+                            print(
+                                f"[RUN_ID={self.run_id}] Caption generation FAILED for image '{image_file}': {error_msg}"
+                            )
+                            self.failed_cases.append((image_file, error_msg))
+                            continue
 
                         print("Evaluating caption...")
                         is_accepted = self.evaluation(caption)
@@ -277,6 +295,29 @@ class Captions:
                         captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True, question, latitude, longitude))
 
             self._save_caption(captions_with_metadata)
+
+        if self.failed_cases:
+            print("\nThe following caption generations failed and were skipped:")
+            for filename, error in self.failed_cases:
+                print(
+                    f"- RUN_ID={self.run_id}, image={filename}, reason={error}"
+                )
+
+            # Persist failures to a log file under data/logs so that it is not
+            # ignored by the global *.log rule in .gitignore.
+            try:
+                project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+                logs_dir = os.path.join(project_root, "data", "logs")
+                os.makedirs(logs_dir, exist_ok=True)
+                run_tag = self.run_id or "unknown_run"
+                log_path = os.path.join(logs_dir, f"caption_failures_{run_tag}.txt")
+                with open(log_path, "w", encoding="utf-8") as f:
+                    f.write(f"Caption generation failures for run_id={self.run_id}\n")
+                    for filename, error in self.failed_cases:
+                        f.write(f"image={filename}\treason={error}\n")
+                print(f"Failure log written to: {log_path}")
+            except Exception as e:
+                print(f"Warning: could not write failures log file: {e}")
 
     def _kosmos(self):
         print("Running Kosmos-2")
