@@ -13,7 +13,7 @@ to interpret the landscape of industrial mining sites across the planet.
 
 <br><br>
 If you want to rebuild the mining area satellite image interpretation pipeline, follow the 
-[installation instructions.](https://github.com/realtechsupport/nudge-x/blob/main/install_instructions.txt)
+[installation instructions.](install_instructions_v2.md)
 <br>
 If you want to recreate the UI, follow the instructions in the
 [application deployment.](https://github.com/realtechsupport/nudge-x/blob/main/frontend/notes/earth_deployment_instructions.md)
