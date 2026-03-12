@@ -1,4 +1,4 @@
-# Earth App – Full Setup & Deployment
+# Earth App Setup & Deployment
 
 This guide shows how to take your project files in **globe** React/Three.js app and get it running on a fresh Ubuntu VM on GCP using **Vite** and **Nginx**.
 
