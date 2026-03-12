@@ -336,14 +336,3 @@ Your changes will be live at `http://YOUR_VM_IP/`.
 
 ---
 
-## 8. Next steps (later)
-
-- Reserving a **static external IP** in GCP and assigning it to the VM.
-- Pointing a **domain name** (e.g. `globe.example.com`) at that IP.
-- Adding **HTTPS** with Let’s Encrypt / Certbot and Nginx integration.
-
-
-## Texture file
-- create a folder "public" in root ("globe")
-- copy the the 2:1 equirectangular world map to that folder
-- redeploy as per step 7 etc.
