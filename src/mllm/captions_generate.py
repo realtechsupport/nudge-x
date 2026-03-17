@@ -406,6 +406,7 @@ class Captions:
                         # Attempt 4: RGB only, quality=40
                         if caption is None:
                             try:
+                                print("Token count exceeded. Running RGB only...")
                                 caption = LlamaCaptionGenerator(
                                     image_file, system_prompt, prompt,
                                     LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
