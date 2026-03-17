@@ -98,6 +98,18 @@ class RAGSystem:
                 break
 
         if matched_country:
+            # Ensure there is an index on the 'country' payload field so that
+            # filter-based queries work correctly on Qdrant Cloud.
+            try:
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name="country",
+                    field_schema=qmodels.PayloadSchemaType.KEYWORD,
+                )
+            except Exception:
+                # If the index already exists or backend does not require it, ignore.
+                pass
+
             country_condition = qmodels.FieldCondition(
                 key="country",
                 match=qmodels.MatchValue(value=matched_country),
@@ -317,11 +329,10 @@ if __name__ == "__main__":
     print()
     print("++++++++++++++++++++++++++++++++++++++")
     print("Nudge-x RAG at your service.")
-    print("Ask a question related to the mining sites in the captions collection below ('exit' to quit):")
     print()
 
     while True:
-        user_query = input("Ask a question (or type 'exit' to quit): ")
+        user_query = input("Ask a question related to the mining sites in the captions collection below ('exit' to quit):")
         if user_query.lower() == 'exit':
             print("Exiting RAG system.")
             break
