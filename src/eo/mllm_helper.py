@@ -257,15 +257,15 @@ def LlamaCaptionGenerator(
     # HERE: Each of the input images (1-3) are from the same unique location and collected at the same time.
     # The first input image is RGB and the subsequent ones, where made available, are bandoperations (NDBI, NDVI, etc).
 
-    image_b64 = compress_image(image_file_path)
+    image_b64 = compress_image(image_file_path, quality = quality)
     second_image_b64 = None
     third_image_b64 = None
     
     if second_image_file_path_or_image is not None:
-        second_image_b64 = compress_image(second_image_file_path_or_image)
+        second_image_b64 = compress_image(second_image_file_path_or_image, quality = quality)
     
     if third_image_file_path_or_image is not None:
-        third_image_b64 = compress_image(third_image_file_path_or_image)
+        third_image_b64 = compress_image(third_image_file_path_or_image, quality = quality)
 
     # Build user content based on how many images are provided
     if second_image_b64 is None and third_image_b64 is None:
