@@ -259,8 +259,13 @@ if __name__ == "__main__":
         client=client,
     )
 
+    print()
+    print()
+    print("++++++++++++++++++++++++++++++++++++++")
+    print("Nudge-x RAG at your service.")
+    print()
     while True:
-        user_query = input("Ask a question (or type 'exit' to quit): ")
+        user_query = input("Ask a question related to the mining sites in the captions collection below ('exit' to quit):")
         if user_query.lower() == 'exit':
             print("Exiting RAG system.")
             break
