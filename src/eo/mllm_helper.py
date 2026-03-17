@@ -236,6 +236,7 @@ def LlamaCaptionGenerator(
     first_image_label: str = "RGB",
     second_image_label: str = "NDVI",
     third_image_label: str = "UDM",
+    quality = 70
 ):
     """
     Generate caption using LLAMA model.
