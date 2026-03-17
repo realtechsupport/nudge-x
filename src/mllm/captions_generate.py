@@ -75,9 +75,9 @@ class Captions:
         self.use_ndvi = use_ndvi
         self.use_udm = use_udm
         self.run_id: Optional[str] = None
-        # (filename, image_mode, error_message)
-        self.failed_cases: List[Tuple[str, str, str]] = []
-        
+        # (filename, error_message)
+        self.failed_cases: List[Tuple[str, str]] = []
+
         # Log the image combination being used
         aux_images = []
         if use_ndvi:
@@ -127,7 +127,7 @@ class Captions:
                 f"No RGB images with metadata found in {images_folder_path}. "
                 "Expected naming: minename_rgb_date.png and mine name must match a row in METADATA_TSV."
             )
-        
+
     def _list_gcs_images(self):
         blobs = self.bucket.list_blobs(prefix=self.prefix)
         return [
@@ -176,11 +176,11 @@ class Captions:
         """Run the selected model."""
         if self.mllm_model not in self._model_selector:
             raise ValueError(f"Unsupported model: {self.mllm_model}")
-        
+
         # Create pipeline run record before starting
         create_table_if_not_exists()
         num_shots = _count_shots(multi_shot_examples)
-        
+
         self.run_id = create_pipeline_run(
             prompt_version=self.prompt_version,
             model_name=LLAMA_MODEL_NAME if self.mllm_model == "LLAMA" else "kosmos-2",
@@ -189,12 +189,12 @@ class Captions:
             top_p=LLAMA_TOP_P,
             num_shots=num_shots
         )
-        
+
         if self.run_id:
             print(f"Pipeline run created with ID: {self.run_id}")
         else:
             print("Warning: Could not create pipeline run record, continuing without run_id.")
-        
+
         self._model_selector[self.mllm_model]()
 
     def _llama(self):
@@ -211,244 +211,38 @@ class Captions:
                 for blob_name, (pil_image, basename) in zip(batch, image_objs):
                     # Find auxiliary images (NDVI, UDM) for this RGB image
                     aux_images = find_matching_auxiliary_images(blob_name, self.all_image_files)
-                    
+
                     # Load auxiliary images if found AND enabled
                     ndvi_image = None
                     udm_image = None
-                    
+
                     if self.use_ndvi and aux_images['ndvi']:
                         print(f"  Using NDVI image: {os.path.basename(aux_images['ndvi'])}")
                         ndvi_image, _ = self._load_image_from_gcs(aux_images['ndvi'])
-                    
+
                     if self.use_udm and aux_images['udm']:
                         print(f"  Using UDM overlay: {os.path.basename(aux_images['udm'])}")
                         udm_image, _ = self._load_image_from_gcs(aux_images['udm'])
-                    
+
                     for question in self.questions:
                         print(f"Processing image: {basename}...")
                         # Pass blob_name (string path) to LlamaPromptGenerator for metadata extraction
                         prompt, location, basename, country, mine_name, latitude, longitude = LlamaPromptGenerator_mines(blob_name, question)
-                        # Multi-step fallback logic:
-                        # 1) Try with current config (RGB + NDVI/UDM as available) at default quality.
-                        # 2) On failure, log and retry with lower quality.
-                        # 3) On failure, log and drop UDM (RGB + NDVI).
-                        # 4) On failure, drop NDVI as well (RGB only). On failure, log and skip.
-
-                        base_quality = 70
-                        low_quality = 50
-
-                        def _attempt_gcs(rgb_img, ndvi_img, udm_img, quality: int) -> Optional[str]:
-                            mode_components = ["RGB"]
-                            if ndvi_img is not None:
-                                mode_components.append("NDVI")
-                            if udm_img is not None:
-                                mode_components.append("UDM")
-                            image_mode_local = "+".join(mode_components)
-                            try:
-                                return LlamaCaptionGenerator(
-                                    rgb_img, system_prompt, prompt,
-                                    LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
-                                    LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
-                                    second_image_file_path_or_image=ndvi_img,
-                                    third_image_file_path_or_image=udm_img,
-                                    first_image_label="RGB",
-                                    second_image_label="NDVI",
-                                    third_image_label="UDM",
-                                    quality=quality,
-                                )
-                            except Exception as e:
-                                error_msg_local = str(e)
-                                print(
-                                    f"[RUN_ID={self.run_id}] Caption generation FAILED for image '{basename}' "
-                                    f"(mode={image_mode_local}): {error_msg_local}"
-                                )
-                                self.failed_cases.append((basename, image_mode_local, error_msg_local))
-                                return None
-
-                        # Step 1: default quality, all available images
-                        caption = _attempt_gcs(pil_image, ndvi_image, udm_image, base_quality)
-                        if caption is None:
-                            # Step 2: lower quality, same set of images
-                            caption = _attempt_gcs(pil_image, ndvi_image, udm_image, low_quality)
-                        if caption is None and (ndvi_image is not None or udm_image is not None):
-                            # Step 3: RGB + NDVI (drop UDM)
-                            caption = _attempt_gcs(pil_image, ndvi_image, None, low_quality)
-                        if caption is None:
-                            # Step 4: RGB only
-                            caption = _attempt_gcs(pil_image, None, None, low_quality)
-                        if caption is None:
-                            # All fallbacks failed; skip this image/question
-                            continue
-
-                        print("Evaluating caption...")
-                        is_accepted = self.evaluation(caption)
-                        # Tuple: (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question, latitude, longitude)
-                        captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True, question, latitude, longitude))
-            # --- Local path flow --- #
-            else:
-                for image_file in batch:
-                    # Find auxiliary images (NDVI, UDM) for this RGB image
-                    aux_images = find_matching_auxiliary_images(image_file, self.all_image_files)
-                    
-                    # Only use auxiliary images if enabled
-                    ndvi_path = aux_images['ndvi'] if self.use_ndvi else None
-                    udm_path = aux_images['udm'] if self.use_udm else None
-                    
-                    if ndvi_path:
-                        print(f"  Using NDVI image: {os.path.basename(ndvi_path)}")
-                    if udm_path:
-                        print(f"  Using UDM overlay: {os.path.basename(udm_path)}")
-                    
-                    for question in self.questions:
-                        print(f"Processing image: {image_file}...")
-                        prompt, location, basename, country, mine_name, latitude, longitude = LlamaPromptGenerator_mines(image_file, question)
-
-                        base_quality = 70
-                        low_quality = 50
-
-                        def _attempt_local(rgb_path: str, ndvi_path_local, udm_path_local, quality: int) -> Optional[str]:
-                            mode_components = ["RGB"]
-                            if ndvi_path_local:
-                                mode_components.append("NDVI")
-                            if udm_path_local:
-                                mode_components.append("UDM")
-                            image_mode_local = "+".join(mode_components)
-                            try:
-                                return LlamaCaptionGenerator(
-                                    rgb_path, system_prompt, prompt,
-                                    LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
-                                    LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
-                                    second_image_file_path_or_image=ndvi_path_local,
-                                    third_image_file_path_or_image=udm_path_local,
-                                    first_image_label="RGB",
-                                    second_image_label="NDVI",
-                                    third_image_label="UDM",
-                                    quality=quality,
-                                )
-                            except Exception as e:
-                                error_msg_local = str(e)
-                                print(
-                                    f"[RUN_ID={self.run_id}] Caption generation FAILED for image '{image_file}' "
-                                    f"(mode={image_mode_local}): {error_msg_local}"
-                                )
-                                self.failed_cases.append((image_file, image_mode_local, error_msg_local))
-                                return None
-
-                        # Step 1: default quality, all available images
-                        caption = _attempt_local(image_file, ndvi_path, udm_path, base_quality)
-                        if caption is None:
-                            # Step 2: lower quality, same set of images
-                            caption = _attempt_local(image_file, ndvi_path, udm_path, low_quality)
-                        if caption is None and (ndvi_path or udm_path):
-                            # Step 3: RGB + NDVI (drop UDM)
-                            caption = _attempt_local(image_file, ndvi_path, None, low_quality)
-                        if caption is None:
-                            # Step 4: RGB only
-                            caption = _attempt_local(image_file, None, None, low_quality)
-                        if caption is None:
-                            # All fallbacks failed; skip this image/question
-                            continue
-
-                        print("Evaluating caption...")
-                        is_accepted = self.evaluation(caption)
-                        # Tuple: (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question, latitude, longitude)
-                        captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True, question, latitude, longitude))
-
-            self._save_caption(captions_with_metadata)
-
-        if self.failed_cases:
-            print("\nThe following caption generations failed and were skipped:")
-            for filename, image_mode, error in self.failed_cases:
-                print(
-                    f"- RUN_ID={self.run_id}, image={filename}, mode={image_mode}, reason={error}"
-                )
-
-            # Persist failures to a log file under data/logs so that it is not
-            # ignored by the global *.log rule in .gitignore.
-            try:
-                project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-                logs_dir = os.path.join(project_root, "data", "logs")
-                os.makedirs(logs_dir, exist_ok=True)
-                run_tag = self.run_id or "unknown_run"
-                log_path = os.path.join(logs_dir, f"caption_failures_{run_tag}.txt")
-                with open(log_path, "w", encoding="utf-8") as f:
-                    f.write(f"Caption generation failures for run_id={self.run_id}\n")
-                    for filename, image_mode, error in self.failed_cases:
-                        f.write(f"image={filename}\tmode={image_mode}\treason={error}\n")
-                print(f"Failure log written to: {log_path}")
-            except Exception as e:
-                print(f"Warning: could not write failures log file: {e}")
-
-    def _kosmos(self):
-        print("Running Kosmos-2")
-        invoke_url = "https://ai.api.nvidia.com/v1/vlm/microsoft/kosmos-2"
-
-        for batch in self._batch_iterator(self.image_files, self.batch_size):
-            print(f"\nProcessing batch of {len(batch)} images...")
-            captions_with_metadata = []
-
-            if self.images_folder_path.startswith("gs://"):
-                image_objs = self._load_images_in_batch(batch)
-                for pil_image, basename in image_objs:
-                    for question in self.questions:
-                        prompt, location, _ = KosmosPromptGenerator(pil_image, question)
-                        caption = KosmosCaptionGenerator(pil_image, prompt, invoke_url)
-
-                        is_accepted = self.evaluation(caption)
-                        # Tuple: (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question)
-                        captions_with_metadata.append((basename, None, location, None, caption, is_accepted, True, question))
-            else:
-                for image_file in batch:
-                    for question in self.questions:
-                        prompt, location, basename = KosmosPromptGenerator(image_file, question)
-                        caption = KosmosCaptionGenerator(image_file, prompt, invoke_url)
-
-                        is_accepted = self.evaluation(caption)
-                        # Tuple: (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question)
-                        captions_with_metadata.append((basename, None, location, None, caption, is_accepted, True, question))
-            self._save_caption(captions_with_metadata)
-
-    def evaluation(self, caption: str, max_retries: int = 3) -> bool:
-        """Evaluate caption and return acceptance flag with retry logic."""
-        evaluator = CaptionEvaluator(
-            gemini_api_key=os.getenv("GOOGLE_API_KEY"),
-            anthropic_api_key=""
-        )
-        
-        for attempt in range(max_retries):
-            try:
-                result = evaluator.evaluate(
-                    caption=caption,
-                    model="gemini",
-                    weights={
-                        "Environmental_Focus": 1/5,
-                        "Specificity_Terminology": 1/5,
-                        "Processes_Patterns": 1/5,
-                        "Adherence_to_Constraints": 1/5,
-                        "Conciseness": 1/5  
-                    },
-                    threshold=3.0
-                )
-                required_keys = {"scores", "decision"}
-                if not result or not required_keys.issubset(result.keys()):
-                    raise RuntimeError(f"Incomplete evaluation result: {result}")
-                print(f"Evaluation decision: {result['decision_text']}")
-                return bool(result["decision"])
-                
-            except (KeyError, RuntimeError, ValueError, AttributeError) as e:
-                # Retry on KeyError (missing fields in JSON), RuntimeError (invalid JSON structure), 
-                # ValueError (empty/invalid response), or AttributeError (module errors)
-                if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
-                    print(f"Evaluation attempt {attempt + 1} failed: {e}")
-                    print(f"Retrying in {wait_time} seconds...")
-                    time.sleep(wait_time)
-                    continue
-                else:
-                    # Last attempt failed, raise the error
-                    print(f"Evaluation failed after {max_retries} attempts: {e}")
-                    raise RuntimeError(f"Evaluation failed after {max_retries} retries") from e
-            except Exception as e:
-                # For other unexpected errors, don't retry
-                print(f"Unexpected evaluation error: {e}")
-                raise RuntimeError("Evaluation failed") from e
+                        # Pass pil_image to LlamaCaptionGenerator for image processing
+                        try:
+                            caption = LlamaCaptionGenerator(
+                                pil_image, system_prompt, prompt,
+                                LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
+                                LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
+                                second_image_file_path_or_image=ndvi_image,
+                                third_image_file_path_or_image=udm_image,
+                                first_image_label="RGB",
+                                second_image_label="NDVI",
+                                third_image_label="UDM"
+                            )
+                        except Exception as e:
+                            error_msg = str(e)
+                            print(
+                                f"[RUN_ID={self.run_id}] Caption generation FAILED for image '{basename}': {error_msg}"
+                            )
+                            self.failed_cases.append((basename, error_msg))
