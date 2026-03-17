@@ -233,6 +233,8 @@ class Captions:
 
                         # Attempt 1: RGB + NDVI + UDM at default quality
                         try:
+                            print("Running  RGB + NDVI + UDM at default quality...")
+                            print()
                             caption = LlamaCaptionGenerator(
                                 pil_image, system_prompt, prompt,
                                 LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
@@ -253,6 +255,8 @@ class Captions:
                         # Attempt 2: same images, lower quality (40)
                         if caption is None:
                             try:
+                                print("Running  RGB + NDVI + UDM at lower quality (40)...")
+                                print()
                                 caption = LlamaCaptionGenerator(
                                     pil_image, system_prompt, prompt,
                                     LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
@@ -274,6 +278,8 @@ class Captions:
                         # Attempt 3: RGB + NDVI only (drop UDM), quality=40
                         if caption is None and ndvi_image is not None:
                             try:
+                                print("Running  RGB + NDVI  at lower quality (40)...")
+                                print()
                                 caption = LlamaCaptionGenerator(
                                     pil_image, system_prompt, prompt,
                                     LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
@@ -292,9 +298,11 @@ class Captions:
                                 )
                                 self.failed_cases.append((basename, error_msg))
 
-                        # Attempt 4: RGB only, quality=40
+                        # Attempt 4: RGB only, quality=70
                         if caption is None:
                             try:
+                                print("Running  RGB  at default quality ...")
+                                print()
                                 caption = LlamaCaptionGenerator(
                                     pil_image, system_prompt, prompt,
                                     LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
@@ -304,7 +312,7 @@ class Captions:
                                     first_image_label="RGB",
                                     second_image_label="NDVI",
                                     third_image_label="UDM",
-                                    quality=40,
+                                    quality=70,
                                 )
                             except Exception as e:
                                 error_msg = str(e)
