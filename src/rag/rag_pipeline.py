@@ -21,6 +21,36 @@ from mllm.config.settings import DEEPSEEK_MODEL, RAG_LLM
 from mllm.config import validate_env
 load_dotenv()
 
+# Basic list of country names for simple query matching
+COUNTRY_NAMES = {
+    "Afghanistan", "Albania", "Algeria", "Andorra", "Angola",
+    "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan",
+    "Bangladesh", "Belarus", "Belgium", "Bolivia", "Bosnia and Herzegovina",
+    "Botswana", "Brazil", "Bulgaria", "Cambodia", "Cameroon",
+    "Canada", "Chile", "China", "Colombia", "Congo",
+    "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic",
+    "Denmark", "Dominican Republic", "Ecuador", "Egypt", "El Salvador",
+    "Estonia", "Ethiopia", "Finland", "France", "Georgia",
+    "Germany", "Ghana", "Greece", "Guatemala", "Honduras",
+    "Hungary", "Iceland", "India", "Indonesia", "Iran",
+    "Iraq", "Ireland", "Israel", "Italy", "Jamaica",
+    "Japan", "Jordan", "Kazakhstan", "Kenya", "Kuwait",
+    "Laos", "Latvia", "Lebanon", "Libya", "Lithuania",
+    "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Mali",
+    "Mexico", "Moldova", "Mongolia", "Montenegro", "Morocco",
+    "Mozambique", "Myanmar", "Namibia", "Nepal", "Netherlands",
+    "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Macedonia",
+    "Norway", "Oman", "Pakistan", "Panama", "Paraguay",
+    "Peru", "Philippines", "Poland", "Portugal", "Qatar",
+    "Romania", "Russia", "Rwanda", "Saudi Arabia", "Senegal",
+    "Serbia", "Singapore", "Slovakia", "Slovenia", "South Africa",
+    "South Korea", "Spain", "Sri Lanka", "Sudan", "Sweden",
+    "Switzerland", "Syria", "Taiwan", "Tanzania", "Thailand",
+    "Tunisia", "Turkey", "Uganda", "Ukraine", "United Arab Emirates",
+    "United Kingdom", "United States", "Uruguay", "Venezuela", "Vietnam",
+    "Zambia", "Zimbabwe",
+}
+
 # ---  CORE RAG LOGIC ---
 # This class handles the retrieval and generation steps of the RAG pipeline
 class RAGSystem:
@@ -55,12 +85,35 @@ class RAGSystem:
                     )
                 ]
             )
+
+        # If the query appears to reference a specific country, add a country filter
+        # and increase the limit so we retrieve all matches for that country rather
+        # than just the top_k vectors.
+        effective_limit = top_k
+        query_lower = query.lower()
+        matched_country = None
+        for country in COUNTRY_NAMES:
+            if country.lower() in query_lower:
+                matched_country = country
+                break
+
+        if matched_country:
+            country_condition = qmodels.FieldCondition(
+                key="country",
+                match=qmodels.MatchValue(value=matched_country),
+            )
+            if query_filter is None:
+                query_filter = qmodels.Filter(must=[country_condition])
+            else:
+                query_filter = qmodels.Filter(must=[*query_filter.must, country_condition])
+            # Use a higher limit when filtering by country to approximate "everything"
+            effective_limit = 1000
         
         # Search for the most relevant vectors (using query_points for qdrant-client >= 1.7)
         search_results = self.client.query_points(
             collection_name=self.collection_name,
             query=query_embedding,
-            limit=top_k,
+            limit=effective_limit,
             with_payload=True,
             query_filter=query_filter,
         ).points
@@ -196,7 +249,7 @@ captions, images, prompts, tools, internal IDs, or your reasoning; return only t
         """
         Dispatch to the appropriate LLM implementation based on RAG_LLM.
 
-        Currently supported: \"deepseek\" (default). To add another LLM, implement
+        Currently supported: "deepseek" (default). To add another LLM, implement
         a corresponding generate_response_<name>() method and extend this
         dispatcher.
         """
@@ -259,13 +312,16 @@ if __name__ == "__main__":
         client=client,
     )
 
+    # Nudge-x RAG preamble
     print()
     print()
     print("++++++++++++++++++++++++++++++++++++++")
     print("Nudge-x RAG at your service.")
+    print("Ask a question related to the mining sites in the captions collection below ('exit' to quit):")
     print()
+
     while True:
-        user_query = input("Ask a question related to the mining sites in the captions collection below ('exit' to quit):")
+        user_query = input("Ask a question (or type 'exit' to quit): ")
         if user_query.lower() == 'exit':
             print("Exiting RAG system.")
             break
