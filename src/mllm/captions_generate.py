@@ -228,7 +228,10 @@ class Captions:
                         print(f"Processing image: {basename}...")
                         # Pass blob_name (string path) to LlamaPromptGenerator for metadata extraction
                         prompt, location, basename, country, mine_name, latitude, longitude = LlamaPromptGenerator_mines(blob_name, question)
-                        # Pass pil_image to LlamaCaptionGenerator for image processing
+
+                        caption = None
+
+                        # Attempt 1: RGB + NDVI + UDM at default quality
                         try:
                             caption = LlamaCaptionGenerator(
                                 pil_image, system_prompt, prompt,
@@ -238,14 +241,80 @@ class Captions:
                                 third_image_file_path_or_image=udm_image,
                                 first_image_label="RGB",
                                 second_image_label="NDVI",
-                                third_image_label="UDM"
+                                third_image_label="UDM",
                             )
                         except Exception as e:
                             error_msg = str(e)
                             print(
-                                f"[RUN_ID={self.run_id}] Caption generation FAILED for image '{basename}': {error_msg}"
+                                f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 1, RGB+NDVI+UDM, default quality) for image '{basename}': {error_msg}"
                             )
                             self.failed_cases.append((basename, error_msg))
+
+                        # Attempt 2: same images, lower quality (40)
+                        if caption is None:
+                            try:
+                                caption = LlamaCaptionGenerator(
+                                    pil_image, system_prompt, prompt,
+                                    LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
+                                    LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
+                                    second_image_file_path_or_image=ndvi_image,
+                                    third_image_file_path_or_image=udm_image,
+                                    first_image_label="RGB",
+                                    second_image_label="NDVI",
+                                    third_image_label="UDM",
+                                    quality=40,
+                                )
+                            except Exception as e:
+                                error_msg = str(e)
+                                print(
+                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 2, RGB+NDVI+UDM, quality=40) for image '{basename}': {error_msg}"
+                                )
+                                self.failed_cases.append((basename, error_msg))
+
+                        # Attempt 3: RGB + NDVI only (drop UDM), quality=40
+                        if caption is None and ndvi_image is not None:
+                            try:
+                                caption = LlamaCaptionGenerator(
+                                    pil_image, system_prompt, prompt,
+                                    LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
+                                    LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
+                                    second_image_file_path_or_image=ndvi_image,
+                                    third_image_file_path_or_image=None,
+                                    first_image_label="RGB",
+                                    second_image_label="NDVI",
+                                    third_image_label="UDM",
+                                    quality=40,
+                                )
+                            except Exception as e:
+                                error_msg = str(e)
+                                print(
+                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 3, RGB+NDVI, quality=40) for image '{basename}': {error_msg}"
+                                )
+                                self.failed_cases.append((basename, error_msg))
+
+                        # Attempt 4: RGB only, quality=40
+                        if caption is None:
+                            try:
+                                caption = LlamaCaptionGenerator(
+                                    pil_image, system_prompt, prompt,
+                                    LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
+                                    LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
+                                    second_image_file_path_or_image=None,
+                                    third_image_file_path_or_image=None,
+                                    first_image_label="RGB",
+                                    second_image_label="NDVI",
+                                    third_image_label="UDM",
+                                    quality=40,
+                                )
+                            except Exception as e:
+                                error_msg = str(e)
+                                print(
+                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 4, RGB only, quality=40) for image '{basename}': {error_msg}"
+                                )
+                                self.failed_cases.append((basename, error_msg))
+
+                        if caption is None:
+                            # All attempts failed; move on to next question/image
                             continue
 
                         print("Evaluating caption...")
@@ -270,6 +339,10 @@ class Captions:
                     for question in self.questions:
                         print(f"Processing image: {image_file}...")
                         prompt, location, basename, country, mine_name, latitude, longitude = LlamaPromptGenerator_mines(image_file, question)
+
+                        caption = None
+
+                        # Attempt 1: RGB + NDVI + UDM at default quality
                         try:
                             caption = LlamaCaptionGenerator(
                                 image_file, system_prompt, prompt,
@@ -279,14 +352,80 @@ class Captions:
                                 third_image_file_path_or_image=udm_path,
                                 first_image_label="RGB",
                                 second_image_label="NDVI",
-                                third_image_label="UDM"
+                                third_image_label="UDM",
                             )
                         except Exception as e:
                             error_msg = str(e)
                             print(
-                                f"[RUN_ID={self.run_id}] Caption generation FAILED for image '{image_file}': {error_msg}"
+                                f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 1, RGB+NDVI+UDM, default quality) for image '{image_file}': {error_msg}"
                             )
                             self.failed_cases.append((image_file, error_msg))
+
+                        # Attempt 2: same images, lower quality (40)
+                        if caption is None:
+                            try:
+                                caption = LlamaCaptionGenerator(
+                                    image_file, system_prompt, prompt,
+                                    LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
+                                    LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
+                                    second_image_file_path_or_image=ndvi_path,
+                                    third_image_file_path_or_image=udm_path,
+                                    first_image_label="RGB",
+                                    second_image_label="NDVI",
+                                    third_image_label="UDM",
+                                    quality=40,
+                                )
+                            except Exception as e:
+                                error_msg = str(e)
+                                print(
+                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 2, RGB+NDVI+UDM, quality=40) for image '{image_file}': {error_msg}"
+                                )
+                                self.failed_cases.append((image_file, error_msg))
+
+                        # Attempt 3: RGB + NDVI only (drop UDM), quality=40
+                        if caption is None and ndvi_path is not None:
+                            try:
+                                caption = LlamaCaptionGenerator(
+                                    image_file, system_prompt, prompt,
+                                    LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
+                                    LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
+                                    second_image_file_path_or_image=ndvi_path,
+                                    third_image_file_path_or_image=None,
+                                    first_image_label="RGB",
+                                    second_image_label="NDVI",
+                                    third_image_label="UDM",
+                                    quality=40,
+                                )
+                            except Exception as e:
+                                error_msg = str(e)
+                                print(
+                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 3, RGB+NDVI, quality=40) for image '{image_file}': {error_msg}"
+                                )
+                                self.failed_cases.append((image_file, error_msg))
+
+                        # Attempt 4: RGB only, quality=40
+                        if caption is None:
+                            try:
+                                caption = LlamaCaptionGenerator(
+                                    image_file, system_prompt, prompt,
+                                    LLAMA_MODEL_NAME, LLAMA_INVOKE_URL,
+                                    LLAMA_TEMPERATURE, LLAMA_TOP_P, LLAMA_MAX_TOKENS, LLAMA_FREQUENCY_PENALTY,
+                                    second_image_file_path_or_image=None,
+                                    third_image_file_path_or_image=None,
+                                    first_image_label="RGB",
+                                    second_image_label="NDVI",
+                                    third_image_label="UDM",
+                                    quality=40,
+                                )
+                            except Exception as e:
+                                error_msg = str(e)
+                                print(
+                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 4, RGB only, quality=40) for image '{image_file}': {error_msg}"
+                                )
+                                self.failed_cases.append((image_file, error_msg))
+
+                        if caption is None:
+                            # All attempts failed; move on to next question/image
                             continue
 
                         print("Evaluating caption...")
