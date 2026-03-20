@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 import json
 from typing import List
@@ -21,8 +22,9 @@ from mllm.config.settings import DEEPSEEK_MODEL, RAG_LLM
 from mllm.config import validate_env
 load_dotenv()
 
-# Basic list of country names for simple query matching
-COUNTRY_NAMES = {
+# Basic list of country names for simple query matching.
+# Use a list rather than a set so matching order is deterministic.
+COUNTRY_NAMES = [
     "Afghanistan", "Albania", "Algeria", "Andorra", "Angola",
     "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan",
     "Bangladesh", "Belarus", "Belgium", "Bolivia", "Bosnia and Herzegovina",
@@ -49,7 +51,22 @@ COUNTRY_NAMES = {
     "Tunisia", "Turkey", "Uganda", "Ukraine", "United Arab Emirates",
     "United Kingdom", "United States", "Uruguay", "Venezuela", "Vietnam",
     "Zambia", "Zimbabwe",
-}
+]
+
+
+def _extract_countries_from_query(query: str) -> list[str]:
+    """Return all explicitly mentioned countries in deterministic order."""
+    query_lower = query.lower()
+    matches: list[str] = []
+
+    # Prefer longer names first so, for example, "United States" is matched
+    # before a shorter overlapping token in another phrase.
+    for country in sorted(COUNTRY_NAMES, key=lambda name: (-len(name), name)):
+        pattern = rf"\b{re.escape(country.lower())}\b"
+        if re.search(pattern, query_lower):
+            matches.append(country)
+
+    return matches
 
 # ---  CORE RAG LOGIC ---
 # This class handles the retrieval and generation steps of the RAG pipeline
@@ -86,18 +103,13 @@ class RAGSystem:
                 ]
             )
 
-        # If the query appears to reference a specific country, add a country filter
-        # and increase the limit so we retrieve all matches for that country rather
-        # than just the top_k vectors.
+        # If the query references one or more countries, apply a deterministic
+        # country filter. Multi-country comparison questions should retrieve
+        # chunks from all mentioned countries rather than only the first match.
         effective_limit = top_k
-        query_lower = query.lower()
-        matched_country = None
-        for country in COUNTRY_NAMES:
-            if country.lower() in query_lower:
-                matched_country = country
-                break
+        matched_countries = _extract_countries_from_query(query)
 
-        if matched_country:
+        if matched_countries:
             # Ensure there is an index on the 'country' payload field so that
             # filter-based queries work correctly on Qdrant Cloud.
             try:
@@ -110,16 +122,42 @@ class RAGSystem:
                 # If the index already exists or backend does not require it, ignore.
                 pass
 
-            country_condition = qmodels.FieldCondition(
-                key="country",
-                match=qmodels.MatchValue(value=matched_country),
+            country_conditions = [
+                qmodels.FieldCondition(
+                    key="country",
+                    match=qmodels.MatchValue(value=country),
+                )
+                for country in matched_countries
+            ]
+
+            country_filter = (
+                qmodels.Filter(should=country_conditions)
+                if len(country_conditions) > 1
+                else qmodels.Filter(must=country_conditions)
             )
+
+            existing_must = list(query_filter.must) if query_filter and query_filter.must else []
+            existing_should = list(query_filter.should) if query_filter and query_filter.should else []
+            existing_must_not = list(query_filter.must_not) if query_filter and query_filter.must_not else []
+
             if query_filter is None:
-                query_filter = qmodels.Filter(must=[country_condition])
+                query_filter = country_filter
+            elif country_filter.should:
+                query_filter = qmodels.Filter(
+                    must=[*existing_must, country_filter],
+                    should=existing_should,
+                    must_not=existing_must_not,
+                )
             else:
-                query_filter = qmodels.Filter(must=[*query_filter.must, country_condition])
-            # Use a higher limit when filtering by country to approximate "everything"
-            effective_limit = 1000
+                query_filter = qmodels.Filter(
+                    must=[*existing_must, *country_conditions],
+                    should=existing_should,
+                    must_not=existing_must_not,
+                )
+
+            # Use a higher limit when filtering by one or more countries so that
+            # comparison questions have enough supporting chunks from each country.
+            effective_limit = max(top_k, 1000)
         
         # Search for the most relevant vectors (using query_points for qdrant-client >= 1.7)
         search_results = self.client.query_points(
