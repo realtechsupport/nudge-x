@@ -259,7 +259,7 @@ class RAGSystem:
 
         system_prompt = """You are a retrieval-augmented assistant for DeepSeek. Answer strictly and exclusively
 from the provided source text; if a required fact is absent, say you lack sufficient information and stop,
-without speculation or outside knowledge. Produce exactly one concise, well-crafted paragraph of neutral
+without speculation. Produce exactly one concise, well-crafted paragraph of neutral
 prose (≤250 words) in plain text only; do not use bullet points, numbering, headings, tables, markdown,
 emojis, or extra line breaks. Begin with the direct answer, preserve essential terms, numbers, and dates
 from the source text, and never mention or allude to the source, retrieval system, vector database,
