@@ -123,7 +123,7 @@ def main():
     mark_embeddings_added(original_caption_ids)
 
     #print(f"Embeddings created and stored for {len(point_ids)} chunks.")
-    print(""All captions have been converted into embeddings.")
+    print("All captions have been converted into embeddings.")
     print("You can now run the RAG pipeline.")
 
 
