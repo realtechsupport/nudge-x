@@ -85,9 +85,10 @@ class Captions:
         if use_udm:
             aux_images.append("UDM")
         if aux_images:
-            print(f"Image mode: RGB + {' + '.join(aux_images)}")
+            # This is based on configuration flags; actual per-image availability may vary.
+            print(f"Configured image mode: RGB + {' + '.join(aux_images)}")
         else:
-            print("Image mode: RGB only")
+            print("Configured image mode: RGB only")
 
         self._model_selector = {
             "LLAMA": self._llama,
@@ -201,6 +202,9 @@ class Captions:
         """Run caption generation with LLaMA model in batches."""
         print("Running LLaMA-4")
 
+        total_sites = len(self.image_files)
+        successful_sites: set[str] = set()
+
         for batch in self._batch_iterator(self.image_files, self.batch_size):
             print(f"\nProcessing batch of {len(batch)} images...")
             captions_with_metadata = []
@@ -231,9 +235,17 @@ class Captions:
 
                         caption = None
 
+                        # Describe the image combination actually available for this RGB image.
+                        attempt1_image_combo_parts = ["RGB"]
+                        if ndvi_image is not None:
+                            attempt1_image_combo_parts.append("NDVI")
+                        if udm_image is not None:
+                            attempt1_image_combo_parts.append("UDM")
+                        attempt1_image_combo = "+".join(attempt1_image_combo_parts)
+
                         # Attempt 1: RGB + NDVI + UDM at default quality
                         try:
-                            print("Running  RGB + NDVI + UDM at default quality...")
+                            print(f"Running {attempt1_image_combo} at default quality...")
                             print()
                             caption = LlamaCaptionGenerator(
                                 pil_image, system_prompt, prompt,
@@ -248,14 +260,14 @@ class Captions:
                         except Exception as e:
                             error_msg = str(e)
                             print(
-                                f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 1, RGB+NDVI+UDM, default quality) for image '{basename}': {error_msg}"
+                                f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 1, {attempt1_image_combo}, default quality) for image '{basename}': {error_msg}"
                             )
                             self.failed_cases.append((basename, error_msg))
 
                         # Attempt 2: same images, lower quality (40)
                         if caption is None:
                             try:
-                                print("Running  RGB + NDVI + UDM at lower quality (40)...")
+                                print(f"Running {attempt1_image_combo} at lower quality (40)...")
                                 print()
                                 caption = LlamaCaptionGenerator(
                                     pil_image, system_prompt, prompt,
@@ -271,7 +283,7 @@ class Captions:
                             except Exception as e:
                                 error_msg = str(e)
                                 print(
-                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 2, RGB+NDVI+UDM, quality=40) for image '{basename}': {error_msg}"
+                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 2, {attempt1_image_combo}, quality=40) for image '{basename}': {error_msg}"
                                 )
                                 self.failed_cases.append((basename, error_msg))
 
@@ -301,7 +313,7 @@ class Captions:
                         # Attempt 4: RGB only, quality=70
                         if caption is None:
                             try:
-                                print("Running  RGB  at default quality ...")
+                                print("Running RGB at default..")
                                 print()
                                 caption = LlamaCaptionGenerator(
                                     pil_image, system_prompt, prompt,
@@ -328,6 +340,7 @@ class Captions:
                         print("Evaluating caption...")
                         is_accepted = self.evaluation(caption)
                         # Tuple: (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question, latitude, longitude)
+                        successful_sites.add(basename)
                         captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True, question, latitude, longitude))
             # --- Local path flow --- #
             else:
@@ -350,6 +363,14 @@ class Captions:
 
                         caption = None
 
+                        # Describe the image combination actually available for this RGB image.
+                        attempt1_image_combo_parts = ["RGB"]
+                        if ndvi_path is not None:
+                            attempt1_image_combo_parts.append("NDVI")
+                        if udm_path is not None:
+                            attempt1_image_combo_parts.append("UDM")
+                        attempt1_image_combo = "+".join(attempt1_image_combo_parts)
+
                         # Attempt 1: RGB + NDVI + UDM at default quality
                         try:
                             caption = LlamaCaptionGenerator(
@@ -365,7 +386,7 @@ class Captions:
                         except Exception as e:
                             error_msg = str(e)
                             print(
-                                f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 1, RGB+NDVI+UDM, default quality) for image '{image_file}': {error_msg}"
+                                f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 1, {attempt1_image_combo}, default quality) for image '{image_file}': {error_msg}"
                             )
                             self.failed_cases.append((image_file, error_msg))
 
@@ -386,7 +407,7 @@ class Captions:
                             except Exception as e:
                                 error_msg = str(e)
                                 print(
-                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 2, RGB+NDVI+UDM, quality=40) for image '{image_file}': {error_msg}"
+                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 2, {attempt1_image_combo}, quality=40) for image '{image_file}': {error_msg}"
                                 )
                                 self.failed_cases.append((image_file, error_msg))
 
@@ -440,17 +461,14 @@ class Captions:
                         print("Evaluating caption...")
                         is_accepted = self.evaluation(caption)
                         # Tuple: (filename, mine_name, location, country, caption, is_accepted, is_evaluated, question, latitude, longitude)
+                        successful_sites.add(basename)
                         captions_with_metadata.append((basename, mine_name, location, country, caption, is_accepted, True, question, latitude, longitude))
 
             self._save_caption(captions_with_metadata)
 
-        if self.failed_cases:
-            print("\nThe following caption generations failed and were skipped:")
-            for filename, error in self.failed_cases:
-                print(
-                    f"- RUN_ID={self.run_id}, image={filename}, reason={error}"
-                )
+        print(f"{len(successful_sites)} of {total_sites} sites successfully processed")
 
+        if self.failed_cases:
             # Persist failures to a log file under data/logs so that it is not
             # ignored by the global *.log rule in .gitignore.
             try:
