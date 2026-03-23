@@ -6,6 +6,7 @@ import os
 import json
 import time
 from typing import List, Tuple, Optional
+from collections import Counter
 from mllm.prompts import system_prompt, questions, multi_shot_examples
 from eo.mllm_helper import (
     LlamaPromptGenerator_mines, LlamaCaptionGenerator, KosmosPromptGenerator,
@@ -128,7 +129,26 @@ class Captions:
                 f"No RGB images with metadata found in {images_folder_path}. "
                 "Expected naming: minename_rgb_date.png and mine name must match a row in METADATA_TSV."
             )
-        
+
+    def _print_caption_failure_summary(self, log_path: Optional[str] = None) -> None:
+        """Print aggregated failure stats; full per-event lines stay in log file only."""
+        if not self.failed_cases:
+            return
+        n_events = len(self.failed_cases)
+        unique_images = len({img for img, _ in self.failed_cases})
+        reason_counts = Counter(err for _, err in self.failed_cases)
+        top_n = 5
+        print(f"\n--- Caption generation failure summary (run_id={self.run_id}) ---")
+        print(f"  Logged events: {n_events}  |  Unique images (paths/names): {unique_images}")
+        for reason, cnt in reason_counts.most_common(top_n):
+            preview = reason if len(reason) <= 160 else reason[:157] + "..."
+            print(f"  [{cnt}x] {preview}")
+        remaining = len(reason_counts) - min(top_n, len(reason_counts))
+        if remaining > 0:
+            print(f"  ... and {remaining} more distinct reason(s)")
+        if log_path:
+            print(f"  Full per-event log: {log_path}")
+
     def _list_gcs_images(self):
         blobs = self.bucket.list_blobs(prefix=self.prefix)
         return [
@@ -259,9 +279,6 @@ class Captions:
                             )
                         except Exception as e:
                             error_msg = str(e)
-                            print(
-                                f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 1, {attempt1_image_combo}, default quality) for image '{basename}': {error_msg}"
-                            )
                             self.failed_cases.append((basename, error_msg))
 
                         # Attempt 2: same images, lower quality (40)
@@ -282,9 +299,6 @@ class Captions:
                                 )
                             except Exception as e:
                                 error_msg = str(e)
-                                print(
-                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 2, {attempt1_image_combo}, quality=40) for image '{basename}': {error_msg}"
-                                )
                                 self.failed_cases.append((basename, error_msg))
 
                         # Attempt 3: RGB + NDVI only (drop UDM), quality=40
@@ -305,9 +319,6 @@ class Captions:
                                 )
                             except Exception as e:
                                 error_msg = str(e)
-                                print(
-                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 3, RGB+NDVI, quality=40) for image '{basename}': {error_msg}"
-                                )
                                 self.failed_cases.append((basename, error_msg))
 
                         # Attempt 4: RGB only, quality=70
@@ -328,9 +339,6 @@ class Captions:
                                 )
                             except Exception as e:
                                 error_msg = str(e)
-                                print(
-                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 4, RGB only, quality=40) for image '{basename}': {error_msg}"
-                                )
                                 self.failed_cases.append((basename, error_msg))
 
                         if caption is None:
@@ -385,9 +393,6 @@ class Captions:
                             )
                         except Exception as e:
                             error_msg = str(e)
-                            print(
-                                f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 1, {attempt1_image_combo}, default quality) for image '{image_file}': {error_msg}"
-                            )
                             self.failed_cases.append((image_file, error_msg))
 
                         # Attempt 2: same images, lower quality (40)
@@ -406,9 +411,6 @@ class Captions:
                                 )
                             except Exception as e:
                                 error_msg = str(e)
-                                print(
-                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 2, {attempt1_image_combo}, quality=40) for image '{image_file}': {error_msg}"
-                                )
                                 self.failed_cases.append((image_file, error_msg))
 
                         # Attempt 3: RGB + NDVI only (drop UDM), quality=40
@@ -427,9 +429,6 @@ class Captions:
                                 )
                             except Exception as e:
                                 error_msg = str(e)
-                                print(
-                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 3, RGB+NDVI, quality=40) for image '{image_file}': {error_msg}"
-                                )
                                 self.failed_cases.append((image_file, error_msg))
 
                         # Attempt 4: RGB only, quality=40
@@ -449,9 +448,6 @@ class Captions:
                                 )
                             except Exception as e:
                                 error_msg = str(e)
-                                print(
-                                    f"[RUN_ID={self.run_id}] Caption generation FAILED (attempt 4, RGB only, quality=40) for image '{image_file}': {error_msg}"
-                                )
                                 self.failed_cases.append((image_file, error_msg))
 
                         if caption is None:
@@ -481,9 +477,10 @@ class Captions:
                     f.write(f"Caption generation failures for run_id={self.run_id}\n")
                     for filename, error in self.failed_cases:
                         f.write(f"image={filename}\treason={error}\n")
-                print(f"Failure log written to: {log_path}")
+                self._print_caption_failure_summary(log_path)
             except Exception as e:
                 print(f"Warning: could not write failures log file: {e}")
+                self._print_caption_failure_summary()
 
     def _kosmos(self):
         print("Running Kosmos-2")
