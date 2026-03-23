@@ -1,5 +1,5 @@
 import json
-import google.generativeai as genai
+from google import genai
 import settings 
 
 
@@ -12,8 +12,9 @@ class CaptionEvaluator:
     def __init__(self, gemini_api_key: str = None):
         # Use key passed in OR from settings
         self.gemini_api_key = gemini_api_key or settings.GEMINI_API_KEY
+        self.genai_client = None
         if self.gemini_api_key:
-            genai.configure(api_key=self.gemini_api_key)
+            self.genai_client = genai.Client(api_key=self.gemini_api_key)
 
         # Define metrics (unchanged)
         self.metrics = {
@@ -182,10 +183,12 @@ When evaluating, consider if the caption:
 
     def _call_gemini_api(self, judge_prompt: str) -> dict:
         try:
-            model = genai.GenerativeModel(settings.MODEL_NAME)
-            response = model.generate_content(
-                judge_prompt,
-                generation_config={
+            if not self.genai_client:
+                return None
+            response = self.genai_client.models.generate_content(
+                model=settings.MODEL_NAME,
+                contents=judge_prompt,
+                config={
                     "temperature": settings.TEMPERATURE,
                     "top_p": settings.TOP_P,
                     "top_k": settings.TOP_K

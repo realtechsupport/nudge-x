@@ -1,6 +1,6 @@
 import requests
 import json
-import google.generativeai as genai
+from google import genai
 from mllm.config.settings import EVALUATION_MODEL_NAME
 
 class CaptionEvaluator:
@@ -19,10 +19,11 @@ class CaptionEvaluator:
         """
         self.gemini_api_key = gemini_api_key
         self.anthropic_api_key = anthropic_api_key
+        self.genai_client = None
         
-        # Configure Gemini if API key is provided
+        # Initialize Gemini client if API key is provided
         if self.gemini_api_key:
-            genai.configure(api_key=self.gemini_api_key)
+            self.genai_client = genai.Client(api_key=self.gemini_api_key)
     
     def evaluate(self, caption: str, model: str, weights: dict = None, threshold: float = 3.5) -> dict:
         """
@@ -186,7 +187,8 @@ Reasoning:
     def _call_gemini_api(self, judge_prompt: str) -> dict:
         """Call the Gemini API and return structured JSON output."""
         try:
-            model = genai.GenerativeModel(EVALUATION_MODEL_NAME)
+            if not self.genai_client:
+                raise ValueError("Gemini client is not initialized")
 
             response_schema = {
                 "type": "object",
@@ -200,13 +202,13 @@ Reasoning:
                 }
             }
 
-            response = model.generate_content(
-                judge_prompt,
-                generation_config={
+            response = self.genai_client.models.generate_content(
+                model=EVALUATION_MODEL_NAME,
+                contents=judge_prompt,
+                config={
                     "temperature": 0.1,
                     "top_p": 0.95,
                     "top_k": 20,
-                    "candidate_count": 1,
                     "response_mime_type": "application/json",
                     "response_schema": response_schema
                 }

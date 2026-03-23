@@ -1,7 +1,7 @@
 from google.colab import userdata
 import requests
 import json
-import google.generativeai as genai
+from google import genai
 import anthropic
 
 class CaptionEvaluator:
@@ -20,10 +20,11 @@ class CaptionEvaluator:
         """
         self.gemini_api_key = gemini_api_key
         self.anthropic_api_key = anthropic_api_key
+        self.genai_client = None
         
-        # Configure Gemini if API key is provided
+        # Initialize Gemini client if API key is provided
         if self.gemini_api_key:
-            genai.configure(api_key=self.gemini_api_key)
+            self.genai_client = genai.Client(api_key=self.gemini_api_key)
     
     def evaluate(self, caption: str, model: str, weights: dict = None, threshold: float = 3.5) -> dict:
         """
@@ -152,8 +153,8 @@ Reasoning:
     def _call_gemini_api(self, judge_prompt: str) -> dict:
         """Helper function to call Gemini API using the Google Generative AI client library"""
         try:
-            # Create the model instance
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            if not self.genai_client:
+                return None
             
             # Define the response schema for structured output
             response_schema = {
@@ -165,13 +166,13 @@ Reasoning:
             }
             
             # Generate content with structured output
-            response = model.generate_content(
-                judge_prompt,
-                generation_config={
+            response = self.genai_client.models.generate_content(
+                model="gemini-2.0-flash-exp",
+                contents=judge_prompt,
+                config={
                     "temperature": 0.1,  # Low temperature for consistent evaluation
                     "top_p": 0.95,
                     "top_k": 20,
-                    "candidate_count": 1,
                     "response_mime_type": "application/json",
                     "response_schema": response_schema
                 }
