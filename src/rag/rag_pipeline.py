@@ -117,7 +117,129 @@ class RAGSystem:
         self.model = SentenceTransformer(model_name)
         self.vector_size = self.model.get_sentence_embedding_dimension()
 
-    def _build_query_filter(self, query: str):
+    def _understand_query(self, query: str) -> dict[str, Any] | None:
+        """Use DeepSeek to extract retrieval intent/entities. Returns None on failure."""
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            return None
+
+        model_name = (os.getenv("RAG_QUERY_UNDERSTANDING_MODEL") or DEEPSEEK_MODEL).strip()
+        if not model_name:
+            return None
+
+        system_prompt = (
+            "You extract retrieval metadata from user questions.\n"
+            "Return ONLY valid JSON with keys: countries, mine_names, query_type, search_query.\n"
+            "Rules:\n"
+            "- countries: canonical country names (e.g., United States, Australia)\n"
+            "- mine_names: explicit mine/site names from query\n"
+            "- query_type: one of fact, comparison, set\n"
+            "- search_query: concise rewritten retrieval query\n"
+            "- If unknown, use empty arrays and query_type=fact\n"
+            "- Do not include markdown, comments, or extra text"
+        )
+        user_prompt = f"Query: {query}"
+
+        url = "https://api.deepseek.com/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+        payload = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.1,
+            "max_tokens": 200,
+        }
+
+        try:
+            response = requests.post(url, headers=headers, data=json.dumps(payload))
+            response.raise_for_status()
+            data = response.json()
+            raw_content = (
+                data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
+            if not raw_content:
+                return None
+
+            content = raw_content.strip()
+            if content.startswith("```"):
+                content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
+                content = re.sub(r"\s*```$", "", content)
+
+            parsed: dict[str, Any]
+            try:
+                parsed = json.loads(content)
+            except json.JSONDecodeError:
+                start = content.find("{")
+                end = content.rfind("}")
+                if start == -1 or end == -1 or end < start:
+                    return None
+                parsed = json.loads(content[start:end + 1])
+
+            countries_raw = parsed.get("countries", [])
+            mine_names_raw = parsed.get("mine_names", [])
+            query_type_raw = str(parsed.get("query_type", "fact")).strip().lower()
+            search_query_raw = str(parsed.get("search_query", "")).strip()
+
+            countries = [
+                str(v).strip() for v in (countries_raw if isinstance(countries_raw, list) else [])
+                if str(v).strip()
+            ]
+            mine_names = [
+                str(v).strip() for v in (mine_names_raw if isinstance(mine_names_raw, list) else [])
+                if str(v).strip()
+            ]
+            query_type = query_type_raw if query_type_raw in {"fact", "comparison", "set"} else "fact"
+            search_query = search_query_raw or query
+
+            return {
+                "countries": countries,
+                "mine_names": mine_names,
+                "query_type": query_type,
+                "search_query": search_query,
+            }
+        except Exception:
+            return None
+
+    def _merge_filter_conditions(
+        self,
+        query_filter: qmodels.Filter | None,
+        new_conditions: list[qmodels.FieldCondition],
+    ):
+        if not new_conditions:
+            return query_filter
+
+        new_filter = (
+            qmodels.Filter(should=new_conditions)
+            if len(new_conditions) > 1
+            else qmodels.Filter(must=new_conditions)
+        )
+
+        existing_must = list(query_filter.must) if query_filter and query_filter.must else []
+        existing_should = list(query_filter.should) if query_filter and query_filter.should else []
+        existing_must_not = list(query_filter.must_not) if query_filter and query_filter.must_not else []
+
+        if query_filter is None:
+            return new_filter
+        if new_filter.should:
+            return qmodels.Filter(
+                must=[*existing_must, new_filter],
+                should=existing_should,
+                must_not=existing_must_not,
+            )
+        return qmodels.Filter(
+            must=[*existing_must, *new_conditions],
+            should=existing_should,
+            must_not=existing_must_not,
+        )
+
+    def _build_query_filter(self, query: str, understood: dict[str, Any] | None = None):
         # Optional filtering (useful for hierarchical document collections)
         # Example: RAG_NODE_TYPE=chunk to avoid retrieving doc/section nodes directly.
         node_type = (os.getenv("RAG_NODE_TYPE") or "").strip()
@@ -132,10 +254,25 @@ class RAGSystem:
                 ]
             )
 
-        # If the query references one or more countries, apply a deterministic
-        # country filter. Multi-country comparison questions should retrieve
-        # chunks from all mentioned countries rather than only the first match.
-        matched_countries = _extract_countries_from_query(query)
+        # Prefer LLM-understood entities; fall back to deterministic regex matching.
+        matched_countries = []
+        matched_mines = []
+        query_type = _query_type(query)
+        if understood:
+            matched_countries = [
+                str(v).strip() for v in understood.get("countries", [])
+                if str(v).strip()
+            ]
+            matched_mines = [
+                str(v).strip() for v in understood.get("mine_names", [])
+                if str(v).strip()
+            ]
+            parsed_type = str(understood.get("query_type", "fact")).strip().lower()
+            if parsed_type in {"fact", "comparison", "set"}:
+                query_type = parsed_type
+        else:
+            matched_countries = _extract_countries_from_query(query)
+
         if matched_countries:
             try:
                 self.client.create_payload_index(
@@ -153,33 +290,28 @@ class RAGSystem:
                 )
                 for country in matched_countries
             ]
+            query_filter = self._merge_filter_conditions(query_filter, country_conditions)
 
-            country_filter = (
-                qmodels.Filter(should=country_conditions)
-                if len(country_conditions) > 1
-                else qmodels.Filter(must=country_conditions)
-            )
-
-            existing_must = list(query_filter.must) if query_filter and query_filter.must else []
-            existing_should = list(query_filter.should) if query_filter and query_filter.should else []
-            existing_must_not = list(query_filter.must_not) if query_filter and query_filter.must_not else []
-
-            if query_filter is None:
-                query_filter = country_filter
-            elif country_filter.should:
-                query_filter = qmodels.Filter(
-                    must=[*existing_must, country_filter],
-                    should=existing_should,
-                    must_not=existing_must_not,
+        if matched_mines:
+            try:
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name="mine_name",
+                    field_schema=qmodels.PayloadSchemaType.KEYWORD,
                 )
-            else:
-                query_filter = qmodels.Filter(
-                    must=[*existing_must, *country_conditions],
-                    should=existing_should,
-                    must_not=existing_must_not,
-                )
+            except Exception:
+                pass
 
-        return query_filter, matched_countries
+            mine_conditions = [
+                qmodels.FieldCondition(
+                    key="mine_name",
+                    match=qmodels.MatchValue(value=mine_name),
+                )
+                for mine_name in matched_mines
+            ]
+            query_filter = self._merge_filter_conditions(query_filter, mine_conditions)
+
+        return query_filter, matched_countries, matched_mines, query_type
 
     def _format_result_item(self, payload: dict[str, Any]) -> dict[str, Any]:
         chunk_text = payload.get("chunk", "")
@@ -313,11 +445,20 @@ class RAGSystem:
         payloads = [result.payload or {} for result in search_results]
         return self._build_context_from_payloads(payloads)
 
-    def _retrieve_entity_aware_context(self, query_embedding: list[float], query_filter, matched_countries: list[str], query_type: str, top_k: int):
-        if matched_countries:
+    def _retrieve_entity_aware_context(
+        self,
+        query_embedding: list[float],
+        query_filter,
+        matched_countries: list[str],
+        matched_mines: list[str],
+        query_type: str,
+        top_k: int,
+    ):
+        matched_entities_count = len(matched_countries) + len(matched_mines)
+        if matched_entities_count:
             candidate_limit = max(top_k, 1000)
             max_limit = max(candidate_limit, 1000)
-            target_unique_mines = max(len(matched_countries) * 3, 6)
+            target_unique_mines = max(matched_entities_count * 3, 6)
         elif query_type == "comparison":
             candidate_limit = max(top_k, 40)
             max_limit = 200
@@ -357,17 +498,27 @@ class RAGSystem:
 
     def retrieve_context(self, query: str, top_k: int = 3):
         """Performs intent-aware retrieval, widening recall for exhaustive/comparison queries."""
-        query_embedding = self.model.encode(query).tolist()
-        query_filter, matched_countries = self._build_query_filter(query)
-        query_type = _query_type(query)
+        understood = self._understand_query(query)
+        search_query = query
+        if understood:
+            candidate_search_query = str(understood.get("search_query", "")).strip()
+            if candidate_search_query:
+                search_query = candidate_search_query
 
-        if query_type == "fact" and not matched_countries:
+        query_embedding = self.model.encode(search_query).tolist()
+        query_filter, matched_countries, matched_mines, query_type = self._build_query_filter(
+            query=query,
+            understood=understood,
+        )
+
+        if query_type == "fact" and not matched_countries and not matched_mines:
             return self._retrieve_fact_context(query_embedding, query_filter, top_k)
 
         return self._retrieve_entity_aware_context(
             query_embedding=query_embedding,
             query_filter=query_filter,
             matched_countries=matched_countries,
+            matched_mines=matched_mines,
             query_type=query_type,
             top_k=top_k,
         )
