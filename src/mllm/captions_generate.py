@@ -149,6 +149,11 @@ class Captions:
         if log_path:
             print(f"  Full per-event log: {log_path}")
 
+    def _print_image_progress(self, index: int, total: int, image_name: str) -> None:
+        """Print image-level progress in `m/n` format."""
+        remaining = max(total - index, 0)
+        print(f"Processing image {index}/{total} (remaining {remaining}): {image_name}")
+
     def _list_gcs_images(self):
         blobs = self.bucket.list_blobs(prefix=self.prefix)
         return [
@@ -224,6 +229,7 @@ class Captions:
 
         total_sites = len(self.image_files)
         successful_sites: set[str] = set()
+        processed_images = 0
 
         for batch in self._batch_iterator(self.image_files, self.batch_size):
             print(f"\nProcessing batch of {len(batch)} images...")
@@ -233,6 +239,8 @@ class Captions:
                 # batch contains blob names (strings), image_objs contains (pil_image, basename) tuples
                 image_objs = self._load_images_in_batch(batch)
                 for blob_name, (pil_image, basename) in zip(batch, image_objs):
+                    processed_images += 1
+                    self._print_image_progress(processed_images, total_sites, basename)
                     # Find auxiliary images (NDVI, UDM) for this RGB image
                     aux_images = find_matching_auxiliary_images(blob_name, self.all_image_files)
                     
@@ -249,7 +257,6 @@ class Captions:
                         udm_image, _ = self._load_image_from_gcs(aux_images['udm'])
                     
                     for question in self.questions:
-                        print(f"Processing image: {basename}...")
                         # Pass blob_name (string path) to LlamaPromptGenerator for metadata extraction
                         prompt, location, basename, country, mine_name, latitude, longitude = LlamaPromptGenerator_mines(blob_name, question)
 
@@ -353,6 +360,8 @@ class Captions:
             # --- Local path flow --- #
             else:
                 for image_file in batch:
+                    processed_images += 1
+                    self._print_image_progress(processed_images, total_sites, os.path.basename(image_file))
                     # Find auxiliary images (NDVI, UDM) for this RGB image
                     aux_images = find_matching_auxiliary_images(image_file, self.all_image_files)
                     
@@ -366,7 +375,6 @@ class Captions:
                         print(f"  Using UDM overlay: {os.path.basename(udm_path)}")
                     
                     for question in self.questions:
-                        print(f"Processing image: {image_file}...")
                         prompt, location, basename, country, mine_name, latitude, longitude = LlamaPromptGenerator_mines(image_file, question)
 
                         caption = None
@@ -485,6 +493,8 @@ class Captions:
     def _kosmos(self):
         print("Running Kosmos-2")
         invoke_url = "https://ai.api.nvidia.com/v1/vlm/microsoft/kosmos-2"
+        total_sites = len(self.image_files)
+        processed_images = 0
 
         for batch in self._batch_iterator(self.image_files, self.batch_size):
             print(f"\nProcessing batch of {len(batch)} images...")
@@ -493,6 +503,8 @@ class Captions:
             if self.images_folder_path.startswith("gs://"):
                 image_objs = self._load_images_in_batch(batch)
                 for pil_image, basename in image_objs:
+                    processed_images += 1
+                    self._print_image_progress(processed_images, total_sites, basename)
                     for question in self.questions:
                         prompt, location, _ = KosmosPromptGenerator(pil_image, question)
                         caption = KosmosCaptionGenerator(pil_image, prompt, invoke_url)
@@ -502,6 +514,8 @@ class Captions:
                         captions_with_metadata.append((basename, None, location, None, caption, is_accepted, True, question))
             else:
                 for image_file in batch:
+                    processed_images += 1
+                    self._print_image_progress(processed_images, total_sites, os.path.basename(image_file))
                     for question in self.questions:
                         prompt, location, basename = KosmosPromptGenerator(image_file, question)
                         caption = KosmosCaptionGenerator(image_file, prompt, invoke_url)
