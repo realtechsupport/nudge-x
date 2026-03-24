@@ -6,7 +6,6 @@ import os
 import json
 import time
 from typing import List, Tuple, Optional
-from collections import Counter
 from mllm.prompts import system_prompt, questions, multi_shot_examples
 from eo.mllm_helper import (
     LlamaPromptGenerator_mines, LlamaCaptionGenerator, KosmosPromptGenerator,
@@ -136,16 +135,8 @@ class Captions:
             return
         n_events = len(self.failed_cases)
         unique_images = len({img for img, _ in self.failed_cases})
-        reason_counts = Counter(err for _, err in self.failed_cases)
-        top_n = 5
         print(f"\n--- Caption generation failure summary (run_id={self.run_id}) ---")
-        print(f"  Logged events: {n_events}  |  Unique images (paths/names): {unique_images}")
-        for reason, cnt in reason_counts.most_common(top_n):
-            preview = reason if len(reason) <= 160 else reason[:157] + "..."
-            print(f"  [{cnt}x] {preview}")
-        remaining = len(reason_counts) - min(top_n, len(reason_counts))
-        if remaining > 0:
-            print(f"  ... and {remaining} more distinct reason(s)")
+        print(f"  Logged events: {n_events}  |  Unique sites: {unique_images}")
         if log_path:
             print(f"  Full per-event log: {log_path}")
 
