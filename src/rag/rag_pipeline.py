@@ -169,7 +169,8 @@ def _extract_countries_from_query_fuzzy(query: str) -> list[str]:
             result.append(c)
 
     # Tokenize and attempt normalization for each token (keep dots/hyphens for u.s.a, etc.).
-    tokens = re.findall(r"[A-Za-z][A-Za-z\\.\\-']*[A-Za-z]", query or "")
+    # Keep '-' as the last char in the class to avoid regex range ambiguity.
+    tokens = re.findall(r"[A-Za-z][A-Za-z.'-]*[A-Za-z]", query or "")
     for token in tokens:
         if len(_clean_country_key(token)) < 3:
             continue
