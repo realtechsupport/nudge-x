@@ -1,5 +1,6 @@
 import os
 import re
+import difflib
 import requests
 import json
 from typing import Any, List
@@ -54,6 +55,28 @@ COUNTRY_NAMES = [
 ]
 
 
+def _clean_country_key(s: str) -> str:
+    """Normalize a user-provided country token for alias/fuzzy matching."""
+    return re.sub(r"[^a-z]", "", (s or "").strip().lower())
+
+
+# Small curated set of common abbreviations and demonyms.
+# Keys are normalized via `_clean_country_key`.
+COUNTRY_ALIASES: dict[str, str] = {
+    "usa": "United States",
+    "us": "United States",
+    "american": "United States",
+    "uk": "United Kingdom",
+    "unitedkingdom": "United Kingdom",
+    "uae": "United Arab Emirates",
+    "unitedarabemirates": "United Arab Emirates",
+    "drc": "Democratic Republic of the Congo",
+    "congolese": "Democratic Republic of the Congo",
+    "australian": "Australia",
+    # Intentionally small; fuzzy matching will catch typos like "australis".
+}
+
+
 EXHAUSTIVE_PATTERNS = [
     r"\blist all\b",
     r"\bwhich mines\b",
@@ -90,6 +113,72 @@ def _extract_countries_from_query(query: str) -> list[str]:
             matches.append(country)
 
     return matches
+
+
+def _normalize_country(raw: str, *, min_ratio: float = 0.86) -> str | None:
+    """
+    Map a user token/demonym/abbr to a canonical country name.
+
+    Strategy:
+    - curated alias map (fast)
+    - exact/cleaned match against canonical list
+    - fuzzy edit-distance (difflib) over canonical names
+    """
+    if not raw:
+        return None
+
+    key = _clean_country_key(raw)
+    if not key:
+        return None
+
+    # Curated alias fast path.
+    if key in COUNTRY_ALIASES:
+        return COUNTRY_ALIASES[key]
+
+    # Exact/cleaned match against canonical names.
+    for country in COUNTRY_NAMES:
+        if raw.strip().lower() == country.lower():
+            return country
+        if key == _clean_country_key(country):
+            return country
+
+    # Fuzzy match: compare cleaned user token against cleaned canonical names.
+    best_country: str | None = None
+    best_ratio = 0.0
+    for country in COUNTRY_NAMES:
+        c_key = _clean_country_key(country)
+        ratio = difflib.SequenceMatcher(None, key, c_key).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_country = country
+
+    if best_country and best_ratio >= min_ratio:
+        return best_country
+    return None
+
+
+def _extract_countries_from_query_fuzzy(query: str) -> list[str]:
+    """Return country names found via exact matching + fuzzy token normalization."""
+    exact = _extract_countries_from_query(query)
+    result: list[str] = []
+    seen: set[str] = set()
+
+    for c in exact:
+        if c not in seen:
+            seen.add(c)
+            result.append(c)
+
+    # Tokenize and attempt normalization for each token (keep dots/hyphens for u.s.a, etc.).
+    tokens = re.findall(r"[A-Za-z][A-Za-z\\.\\-']*[A-Za-z]", query or "")
+    for token in tokens:
+        if len(_clean_country_key(token)) < 3:
+            continue
+        normalized = _normalize_country(token)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            result.append(normalized)
+
+    return result
 
 
 def _query_type(query: str) -> str:
@@ -135,7 +224,7 @@ class RAGSystem:
         # If the query references one or more countries, apply a deterministic
         # country filter. Multi-country comparison questions should retrieve
         # chunks from all mentioned countries rather than only the first match.
-        matched_countries = _extract_countries_from_query(query)
+        matched_countries = _extract_countries_from_query_fuzzy(query)
         if matched_countries:
             try:
                 self.client.create_payload_index(
