@@ -66,13 +66,54 @@ COUNTRY_ALIASES: dict[str, str] = {
     "usa": "United States",
     "us": "United States",
     "american": "United States",
+    "americans": "United States",
     "uk": "United Kingdom",
     "unitedkingdom": "United Kingdom",
+    "british": "United Kingdom",
     "uae": "United Arab Emirates",
     "unitedarabemirates": "United Arab Emirates",
     "drc": "Democratic Republic of the Congo",
     "congolese": "Democratic Republic of the Congo",
     "australian": "Australia",
+    "australians": "Australia",
+    "canadian": "Canada",
+    "canadians": "Canada",
+    "chinese": "China",
+    "french": "France",
+    "german": "Germany",
+    "greek": "Greece",
+    "indian": "India",
+    "indians": "India",
+    "indonesian": "Indonesia",
+    "iranian": "Iran",
+    "iraqi": "Iraq",
+    "irish": "Ireland",
+    "israeli": "Israel",
+    "italian": "Italy",
+    "japanese": "Japan",
+    "korean": "South Korea",
+    "southkorean": "South Korea",
+    "mexican": "Mexico",
+    "moroccan": "Morocco",
+    "netherland": "Netherlands",
+    "dutch": "Netherlands",
+    "pakistani": "Pakistan",
+    "peruvian": "Peru",
+    "philippine": "Philippines",
+    "polish": "Poland",
+    "portuguese": "Portugal",
+    "romanian": "Romania",
+    "russian": "Russia",
+    "saudi": "Saudi Arabia",
+    "scottish": "United Kingdom",
+    "spanish": "Spain",
+    "swedish": "Sweden",
+    "swiss": "Switzerland",
+    "taiwanese": "Taiwan",
+    "thai": "Thailand",
+    "turkish": "Turkey",
+    "ukrainian": "Ukraine",
+    "vietnamese": "Vietnam",
     # Intentionally small; fuzzy matching will catch typos like "australis".
 }
 
@@ -130,6 +171,12 @@ def _normalize_country(raw: str, *, min_ratio: float = 0.86) -> str | None:
     key = _clean_country_key(raw)
     if not key:
         return None
+
+    # Simple plural stripping (e.g., "Canadians" -> "canadian")
+    if key.endswith("s") and len(key) > 3:
+        singular = key[:-1]
+        if singular in COUNTRY_ALIASES:
+            return COUNTRY_ALIASES[singular]
 
     # Curated alias fast path.
     if key in COUNTRY_ALIASES:
