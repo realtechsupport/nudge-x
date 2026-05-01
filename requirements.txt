@@ -10,6 +10,7 @@ qdrant-client
 tiktoken
 pandas
 pymupdf
+pycountry
 #openeo
 #gdal
 #rasterio
