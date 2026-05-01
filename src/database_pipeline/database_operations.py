@@ -245,10 +245,19 @@ def save_filename_and_captions(
 
 def fetch_captions_without_embeddings(limit: int = 50):
     """
-    Returns a list of captions that are accepted and do not yet have embeddings added.
+    Returns a list of captions that are accepted, do not yet have embeddings,
+    and are NOT superseded by a newer accepted caption for the same filename.
+
+    The "not superseded" condition matters because we may delete an obsolete
+    caption's caption_embeddings row when its Qdrant points get cleaned up
+    (see `delete_caption_embedding_rows`). Without this filter, a caption with
+    no embedding row would be re-picked-up here even if a newer caption already
+    represents the same image — wasting embedding compute and creating duplicate
+    Qdrant points for stale content.
 
     Each row is returned as a dict with keys matching expected usage:
-    id, filename, mine_name, location, country, latitude, longitude, caption, is_accepted, is_evaluated, created_at
+    id, filename, mine_name, location, country, latitude, longitude, caption,
+    is_accepted, is_evaluated, created_at
     """
     conn = connect_db()
     if conn is None:
@@ -257,15 +266,22 @@ def fetch_captions_without_embeddings(limit: int = 50):
     try:
         cursor = conn.cursor()
         # Select captions that are accepted AND either have no row in caption_embeddings
-        # or have a row with embedding_added = FALSE
-        # Now includes mine_name, country, latitude, longitude for metadata enrichment
+        # or have a row with embedding_added = FALSE, AND have no newer accepted
+        # caption for the same filename (otherwise they're obsolete).
         query = """
-            SELECT c.id, c.filename, c.mine_name, c.location, c.country, 
+            SELECT c.id, c.filename, c.mine_name, c.location, c.country,
                    c.latitude, c.longitude, c.caption, c.is_accepted, c.is_evaluated, c.created_at
             FROM captions c
             LEFT JOIN caption_embeddings ce ON ce.caption_id = c.id
             WHERE c.is_accepted = TRUE
               AND (ce.id IS NULL OR ce.embedding_added = FALSE)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM captions c2
+                  WHERE c2.filename = c.filename
+                    AND c2.is_accepted = TRUE
+                    AND c2.created_at > c.created_at
+              )
             ORDER BY c.created_at DESC
             LIMIT %s;
         """
@@ -281,6 +297,42 @@ def fetch_captions_without_embeddings(limit: int = 50):
         if conn:
             cursor.close()
             conn.close()
+
+
+def delete_caption_embedding_rows(caption_ids: List[int]) -> int:
+    """
+    Delete rows from caption_embeddings for the given caption IDs.
+
+    Use this *after* removing the corresponding points from Qdrant. Without
+    this cleanup, the stale-detection query (`fetch_stale_embedding_caption_ids`)
+    keeps reporting the same caption_ids on every subsequent run, because it
+    matches on `embedding_added = TRUE` — which never gets cleared.
+
+    Returns the number of rows actually deleted.
+    """
+    if not caption_ids:
+        return 0
+
+    conn = connect_db()
+    if conn is None:
+        return 0
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM caption_embeddings WHERE caption_id = ANY(%s);",
+            (list(caption_ids),),
+        )
+        deleted = cursor.rowcount
+        conn.commit()
+        return deleted
+    except Exception as e:
+        print(f"Error deleting caption_embeddings rows: {e}")
+        conn.rollback()
+        return 0
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def fetch_stale_embedding_caption_ids(limit: int = 500) -> List[int]:
