@@ -146,8 +146,15 @@ def add_captions_to_vector_db(
 
     # Vectorize all captions
     chunks_text = [doc['chunk'] for doc in captions]
-    vectors = model.encode(chunks_text)
-    
+    print(f"Encoding {len(chunks_text)} chunks with the embedding model "
+          f"(this is the slow step on CPU; progress bar below)...", flush=True)
+    vectors = model.encode(
+        chunks_text,
+        show_progress_bar=True,
+        batch_size=32,
+    )
+    print(f"Encoding done. Upserting {len(chunks_text)} points to Qdrant...", flush=True)
+
     for i, doc in enumerate(captions):
         point_id = str(uuid.uuid4())
         points_to_upsert.append(
