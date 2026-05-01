@@ -1,6 +1,5 @@
 import os
 import re
-import difflib
 import requests
 import json
 from typing import Any, List
@@ -21,101 +20,11 @@ from database_pipeline.vector_db_operations import (
 )
 from mllm.config.settings import DEEPSEEK_MODEL, RAG_LLM
 from mllm.config import validate_env
+from rag.country_normalizer import (
+    extract_iso2_codes_from_text,
+    iso2_to_name,
+)
 load_dotenv()
-
-# Basic list of country names for simple query matching.
-# Use a list rather than a set so matching order is deterministic.
-COUNTRY_NAMES = [
-    "Afghanistan", "Albania", "Algeria", "Andorra", "Angola",
-    "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan",
-    "Bangladesh", "Belarus", "Belgium", "Bolivia", "Bosnia and Herzegovina",
-    "Botswana", "Brazil", "Bulgaria", "Cambodia", "Cameroon",
-    "Canada", "Chile", "China", "Colombia", "Congo",
-    "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic",
-    "Denmark", "Dominican Republic", "Ecuador", "Egypt", "El Salvador",
-    "Estonia", "Ethiopia", "Finland", "France", "Georgia",
-    "Germany", "Ghana", "Greece", "Guatemala", "Honduras",
-    "Hungary", "Iceland", "India", "Indonesia", "Iran",
-    "Iraq", "Ireland", "Israel", "Italy", "Jamaica",
-    "Japan", "Jordan", "Kazakhstan", "Kenya", "Kuwait",
-    "Laos", "Latvia", "Lebanon", "Libya", "Lithuania",
-    "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Mali",
-    "Mexico", "Moldova", "Mongolia", "Montenegro", "Morocco",
-    "Mozambique", "Myanmar", "Namibia", "Nepal", "Netherlands",
-    "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Macedonia",
-    "Norway", "Oman", "Pakistan", "Panama", "Paraguay",
-    "Peru", "Philippines", "Poland", "Portugal", "Qatar",
-    "Romania", "Russia", "Rwanda", "Saudi Arabia", "Senegal",
-    "Serbia", "Singapore", "Slovakia", "Slovenia", "South Africa",
-    "South Korea", "Spain", "Sri Lanka", "Sudan", "Sweden",
-    "Switzerland", "Syria", "Taiwan", "Tanzania", "Thailand",
-    "Tunisia", "Turkey", "Uganda", "Ukraine", "United Arab Emirates",
-    "United Kingdom", "United States", "Uruguay", "Venezuela", "Vietnam",
-    "Zambia", "Zimbabwe",
-]
-
-
-def _clean_country_key(s: str) -> str:
-    """Normalize a user-provided country token for alias/fuzzy matching."""
-    return re.sub(r"[^a-z]", "", (s or "").strip().lower())
-
-
-# Small curated set of common abbreviations and demonyms.
-# Keys are normalized via `_clean_country_key`.
-COUNTRY_ALIASES: dict[str, str] = {
-    "usa": "United States",
-    "us": "United States",
-    "american": "United States",
-    "americans": "United States",
-    "uk": "United Kingdom",
-    "unitedkingdom": "United Kingdom",
-    "british": "United Kingdom",
-    "uae": "United Arab Emirates",
-    "unitedarabemirates": "United Arab Emirates",
-    "drc": "Democratic Republic of the Congo",
-    "congolese": "Democratic Republic of the Congo",
-    "australian": "Australia",
-    "australians": "Australia",
-    "canadian": "Canada",
-    "canadians": "Canada",
-    "chinese": "China",
-    "french": "France",
-    "german": "Germany",
-    "greek": "Greece",
-    "indian": "India",
-    "indians": "India",
-    "indonesian": "Indonesia",
-    "iranian": "Iran",
-    "iraqi": "Iraq",
-    "irish": "Ireland",
-    "israeli": "Israel",
-    "italian": "Italy",
-    "japanese": "Japan",
-    "korean": "South Korea",
-    "southkorean": "South Korea",
-    "mexican": "Mexico",
-    "moroccan": "Morocco",
-    "netherland": "Netherlands",
-    "dutch": "Netherlands",
-    "pakistani": "Pakistan",
-    "peruvian": "Peru",
-    "philippine": "Philippines",
-    "polish": "Poland",
-    "portuguese": "Portugal",
-    "romanian": "Romania",
-    "russian": "Russia",
-    "saudi": "Saudi Arabia",
-    "scottish": "United Kingdom",
-    "spanish": "Spain",
-    "swedish": "Sweden",
-    "swiss": "Switzerland",
-    "taiwanese": "Taiwan",
-    "thai": "Thailand",
-    "turkish": "Turkey",
-    "ukrainian": "Ukraine",
-    "vietnamese": "Vietnam",
-    # Intentionally small; fuzzy matching will catch typos like "australis".
-}
 
 
 EXHAUSTIVE_PATTERNS = [
@@ -141,94 +50,6 @@ COMPARISON_PATTERNS = [
 ]
 
 
-def _extract_countries_from_query(query: str) -> list[str]:
-    """Return all explicitly mentioned countries in deterministic order."""
-    query_lower = query.lower()
-    matches: list[str] = []
-
-    # Prefer longer names first so, for example, "United States" is matched
-    # before a shorter overlapping token in another phrase.
-    for country in sorted(COUNTRY_NAMES, key=lambda name: (-len(name), name)):
-        pattern = rf"\b{re.escape(country.lower())}\b"
-        if re.search(pattern, query_lower):
-            matches.append(country)
-
-    return matches
-
-
-def _normalize_country(raw: str, *, min_ratio: float = 0.86) -> str | None:
-    """
-    Map a user token/demonym/abbr to a canonical country name.
-
-    Strategy:
-    - curated alias map (fast)
-    - exact/cleaned match against canonical list
-    - fuzzy edit-distance (difflib) over canonical names
-    """
-    if not raw:
-        return None
-
-    key = _clean_country_key(raw)
-    if not key:
-        return None
-
-    # Simple plural stripping (e.g., "Canadians" -> "canadian")
-    if key.endswith("s") and len(key) > 3:
-        singular = key[:-1]
-        if singular in COUNTRY_ALIASES:
-            return COUNTRY_ALIASES[singular]
-
-    # Curated alias fast path.
-    if key in COUNTRY_ALIASES:
-        return COUNTRY_ALIASES[key]
-
-    # Exact/cleaned match against canonical names.
-    for country in COUNTRY_NAMES:
-        if raw.strip().lower() == country.lower():
-            return country
-        if key == _clean_country_key(country):
-            return country
-
-    # Fuzzy match: compare cleaned user token against cleaned canonical names.
-    best_country: str | None = None
-    best_ratio = 0.0
-    for country in COUNTRY_NAMES:
-        c_key = _clean_country_key(country)
-        ratio = difflib.SequenceMatcher(None, key, c_key).ratio()
-        if ratio > best_ratio:
-            best_ratio = ratio
-            best_country = country
-
-    if best_country and best_ratio >= min_ratio:
-        return best_country
-    return None
-
-
-def _extract_countries_from_query_fuzzy(query: str) -> list[str]:
-    """Return country names found via exact matching + fuzzy token normalization."""
-    exact = _extract_countries_from_query(query)
-    result: list[str] = []
-    seen: set[str] = set()
-
-    for c in exact:
-        if c not in seen:
-            seen.add(c)
-            result.append(c)
-
-    # Tokenize and attempt normalization for each token (keep dots/hyphens for u.s.a, etc.).
-    # Keep '-' as the last char in the class to avoid regex range ambiguity.
-    tokens = re.findall(r"[A-Za-z][A-Za-z.'-]*[A-Za-z]", query or "")
-    for token in tokens:
-        if len(_clean_country_key(token)) < 3:
-            continue
-        normalized = _normalize_country(token)
-        if normalized and normalized not in seen:
-            seen.add(normalized)
-            result.append(normalized)
-
-    return result
-
-
 def _query_type(query: str) -> str:
     q = query.lower()
     if any(re.search(pattern, q) for pattern in COMPARISON_PATTERNS):
@@ -236,6 +57,7 @@ def _query_type(query: str) -> str:
     if any(re.search(pattern, q) for pattern in EXHAUSTIVE_PATTERNS):
         return "set"
     return "fact"
+
 
 # ---  CORE RAG LOGIC ---
 # This class handles the retrieval and generation steps of the RAG pipeline
@@ -254,69 +76,76 @@ class RAGSystem:
         self.model = SentenceTransformer(model_name)
         self.vector_size = self.model.get_sentence_embedding_dimension()
 
-    def _build_query_filter(self, query: str):
+    def _build_base_filter(self):
         # Optional filtering (useful for hierarchical document collections)
         # Example: RAG_NODE_TYPE=chunk to avoid retrieving doc/section nodes directly.
         node_type = (os.getenv("RAG_NODE_TYPE") or "").strip()
-        query_filter = None
-        if node_type:
-            query_filter = qmodels.Filter(
-                must=[
-                    qmodels.FieldCondition(
-                        key="node_type",
-                        match=qmodels.MatchValue(value=node_type),
-                    )
-                ]
-            )
-
-        # If the query references one or more countries, apply a deterministic
-        # country filter. Multi-country comparison questions should retrieve
-        # chunks from all mentioned countries rather than only the first match.
-        matched_countries = _extract_countries_from_query_fuzzy(query)
-        if matched_countries:
-            try:
-                self.client.create_payload_index(
-                    collection_name=self.collection_name,
-                    field_name="country",
-                    field_schema=qmodels.PayloadSchemaType.KEYWORD,
-                )
-            except Exception:
-                pass
-
-            country_conditions = [
+        if not node_type:
+            return None
+        return qmodels.Filter(
+            must=[
                 qmodels.FieldCondition(
-                    key="country",
-                    match=qmodels.MatchValue(value=country),
+                    key="node_type",
+                    match=qmodels.MatchValue(value=node_type),
                 )
-                for country in matched_countries
             ]
+        )
 
-            country_filter = (
-                qmodels.Filter(should=country_conditions)
-                if len(country_conditions) > 1
-                else qmodels.Filter(must=country_conditions)
+    def _ensure_country_payload_index(self):
+        try:
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="country_code",
+                field_schema=qmodels.PayloadSchemaType.KEYWORD,
             )
+        except Exception:
+            pass
 
-            existing_must = list(query_filter.must) if query_filter and query_filter.must else []
-            existing_should = list(query_filter.should) if query_filter and query_filter.should else []
-            existing_must_not = list(query_filter.must_not) if query_filter and query_filter.must_not else []
+    def _compose_country_filter(self, base_filter, country_codes: list[str]):
+        """Compose a Qdrant filter that matches `country_code` against any of
+        the given ISO 3166-1 alpha-2 codes, AND-ed with `base_filter`."""
+        if not country_codes:
+            return base_filter
 
-            if query_filter is None:
-                query_filter = country_filter
-            elif country_filter.should:
-                query_filter = qmodels.Filter(
-                    must=[*existing_must, country_filter],
-                    should=existing_should,
-                    must_not=existing_must_not,
-                )
-            else:
-                query_filter = qmodels.Filter(
-                    must=[*existing_must, *country_conditions],
-                    should=existing_should,
-                    must_not=existing_must_not,
-                )
+        self._ensure_country_payload_index()
 
-        return query_filter, matched_countries
+        country_conditions = [
+            qmodels.FieldCondition(
+                key="country_code",
+                match=qmodels.MatchValue(value=code),
+            )
+            for code in country_codes
+        ]
+
+        country_filter = (
+            qmodels.Filter(should=country_conditions)
+            if len(country_conditions) > 1
+            else qmodels.Filter(must=country_conditions)
+        )
+
+        if base_filter is None:
+            return country_filter
+
+        existing_must = list(base_filter.must) if base_filter.must else []
+        existing_should = list(base_filter.should) if base_filter.should else []
+        existing_must_not = list(base_filter.must_not) if base_filter.must_not else []
+
+        if country_filter.should:
+            return qmodels.Filter(
+                must=[*existing_must, country_filter],
+                should=existing_should,
+                must_not=existing_must_not,
+            )
+        return qmodels.Filter(
+            must=[*existing_must, *country_conditions],
+            should=existing_should,
+            must_not=existing_must_not,
+        )
+
+    def _build_query_filter(self, query: str):
+        base_filter = self._build_base_filter()
+        country_codes = extract_iso2_codes_from_text(query)
+        return self._compose_country_filter(base_filter, country_codes), country_codes
 
     def _format_result_item(self, payload: dict[str, Any]) -> dict[str, Any]:
         chunk_text = payload.get("chunk", "")
@@ -329,6 +158,7 @@ class RAGSystem:
             "filename": payload.get("filename"),
             "mine_name": payload.get("mine_name"),
             "country": payload.get("country"),
+            "country_code": payload.get("country_code"),
             "location": payload.get("location"),
             "latitude": payload.get("latitude"),
             "longitude": payload.get("longitude"),
@@ -368,8 +198,6 @@ class RAGSystem:
         for rank, result in enumerate(search_results):
             payload = result.payload or {}
             mine_key = self._mine_key(payload)
-            # Smaller score is better here because rank is deterministic and query_points
-            # already returned the points in descending relevance.
             grouped.setdefault(mine_key, []).append((float(rank), payload))
 
         ranked_groups = []
@@ -450,11 +278,35 @@ class RAGSystem:
         payloads = [result.payload or {} for result in search_results]
         return self._build_context_from_payloads(payloads)
 
-    def _retrieve_entity_aware_context(self, query_embedding: list[float], query_filter, matched_countries: list[str], query_type: str, top_k: int):
-        if matched_countries:
+    def _retrieve_per_country_context(self, query_embedding: list[float], country_codes: list[str], top_k: int):
+        """Retrieve separately per country and merge, so no single country
+        dominates the embedding-ranked top-k for multi-country comparisons."""
+        base_filter = self._build_base_filter()
+        per_country_budget = max(top_k, 6)
+        per_mine_cap = 2
+        merged_payloads: list[dict[str, Any]] = []
+
+        for code in country_codes:
+            single_country_filter = self._compose_country_filter(base_filter, [code])
+            results = self._search_points(
+                query_embedding=query_embedding,
+                limit=max(per_country_budget * 4, 40),
+                query_filter=single_country_filter,
+            )
+            grouped = self._group_ranked_results(results, per_mine_cap=per_mine_cap)
+            for _, _, payloads in grouped[:per_country_budget]:
+                merged_payloads.extend(payloads)
+
+        return self._build_context_from_payloads(merged_payloads)
+
+    def _retrieve_entity_aware_context(self, query_embedding: list[float], query_filter, country_codes: list[str], query_type: str, top_k: int):
+        if len(country_codes) >= 2:
+            return self._retrieve_per_country_context(query_embedding, country_codes, top_k)
+
+        if country_codes:
             candidate_limit = max(top_k, 1000)
             max_limit = max(candidate_limit, 1000)
-            target_unique_mines = max(len(matched_countries) * 3, 6)
+            target_unique_mines = max(len(country_codes) * 3, 6)
         elif query_type == "comparison":
             candidate_limit = max(top_k, 40)
             max_limit = 200
@@ -493,28 +345,37 @@ class RAGSystem:
         return self._build_context_from_payloads(final_payloads)
 
     def retrieve_context(self, query: str, top_k: int = 3):
-        """Performs intent-aware retrieval, widening recall for exhaustive/comparison queries."""
+        """Performs intent-aware retrieval, widening recall for exhaustive/comparison queries.
+
+        Returns (combined_context, retrieved_items, country_codes) where
+        country_codes is a list of ISO 3166-1 alpha-2 codes mentioned in the query.
+        """
         query_embedding = self.model.encode(query).tolist()
-        query_filter, matched_countries = self._build_query_filter(query)
+        query_filter, country_codes = self._build_query_filter(query)
         query_type = _query_type(query)
 
-        if query_type == "fact" and not matched_countries:
-            return self._retrieve_fact_context(query_embedding, query_filter, top_k)
+        if query_type == "fact" and not country_codes:
+            context, items = self._retrieve_fact_context(query_embedding, query_filter, top_k)
+            return context, items, country_codes
 
-        return self._retrieve_entity_aware_context(
+        context, items = self._retrieve_entity_aware_context(
             query_embedding=query_embedding,
             query_filter=query_filter,
-            matched_countries=matched_countries,
+            country_codes=country_codes,
             query_type=query_type,
             top_k=top_k,
         )
+        return context, items, country_codes
 
-    def generate_response_deepseek(self, query: str, context: str, model_name: str, context_items: list | None = None):
+    def generate_response_deepseek(self, query: str, context: str, model_name: str, context_items: list | None = None, country_codes: list[str] | None = None):
         """Calls DeepSeek Chat Completions API with the query and retrieved context.
 
         Args:
             query: User question
             context: Retrieved context string
+            country_codes: ISO 3166-1 alpha-2 codes extracted from the query.
+                Surfaced to the model so it can distinguish "no data retrieved"
+                from "no data exists" when answering multi-country questions.
         """
 
 
@@ -526,7 +387,13 @@ emojis, or extra line breaks. Begin with the direct answer, preserve essential t
 from the source text, and never mention or allude to the source, retrieval system, vector database,
 captions, images, prompts, tools, internal IDs, or your reasoning; return only the final answer."""
 
-        user_query_with_context = f"Context: {context}\n\nQuestion: {query}"
+        country_names = [iso2_to_name(c) or c for c in (country_codes or [])]
+        countries_line = (
+            f"Countries referenced in the question: {', '.join(country_names)}\n\n"
+            if country_names
+            else ""
+        )
+        user_query_with_context = f"Context: {context}\n\n{countries_line}Question: {query}"
 
         api_key = os.getenv("DEEPSEEK_API_KEY")
         if not api_key:
@@ -556,7 +423,7 @@ captions, images, prompts, tools, internal IDs, or your reasoning; return only t
         except requests.exceptions.RequestException as e:
             return f"An error occurred during API call: {e}"
 
-    def generate_response(self, query: str, context: str, model_name: str, context_items: list | None = None):
+    def generate_response(self, query: str, context: str, model_name: str, context_items: list | None = None, country_codes: list[str] | None = None):
         """
         Dispatch to the appropriate LLM implementation based on RAG_LLM.
 
@@ -566,7 +433,13 @@ captions, images, prompts, tools, internal IDs, or your reasoning; return only t
         """
         llm = (RAG_LLM or "deepseek").strip().lower()
         if llm == "deepseek":
-            return self.generate_response_deepseek(query, context, model_name, context_items=context_items)
+            return self.generate_response_deepseek(
+                query,
+                context,
+                model_name,
+                context_items=context_items,
+                country_codes=country_codes,
+            )
         raise ValueError(f"Unsupported RAG_LLM '{llm}'. Currently supported: deepseek")
 
     def generate_response_without_rag(self, query: str, model_name: str):
@@ -639,13 +512,14 @@ if __name__ == "__main__":
         print(f"\n--- Processing Query: '{user_query}' ---")
 
         # Retrieval step: find relevant chunks and images
-        retrieved_context, retrieved_items = rag.retrieve_context(user_query)
+        retrieved_context, retrieved_items, country_codes = rag.retrieve_context(user_query)
         # Generation step: get the LLM's answer via dispatcher
         llm_response = rag.generate_response(
             user_query,
             retrieved_context,
             model_name=DEEPSEEK_MODEL,
             context_items=retrieved_items,
+            country_codes=country_codes,
         )
         print(f"\nResponse:\n{llm_response}")
         print("-" * 50)
