@@ -22,6 +22,7 @@ from database_pipeline.vector_db_operations import (
     delete_points_by_caption_id,
 )
 from mllm.config import validate_env
+from rag.country_normalizer import to_iso2, iso2_to_name
 
 encoding = tiktoken.get_encoding("cl100k_base")
 
@@ -82,10 +83,16 @@ def main():
 
     for row in pending:
         mine_name = row.get("mine_name") or ""
-        country = row.get("country") or ""
+        country_raw = row.get("country") or ""
         location = row.get("location") or ""
         latitude = row.get("latitude")
         longitude = row.get("longitude")
+
+        # Normalize at index time: store ISO 3166-1 alpha-2 in `country_code`
+        # for filtering, and the canonical English name in `country` for display.
+        # Falls back to the raw input if the country can't be resolved.
+        country_code = to_iso2(country_raw)
+        country = iso2_to_name(country_code) if country_code else country_raw
 
         # Build metadata prefix for semantic search (will be embedded with caption)
         metadata_prefix = f"Mine: {mine_name}. Country: {country}. Location: {location}."
@@ -100,6 +107,7 @@ def main():
                 "filename": row["filename"],
                 "mine_name": mine_name,
                 "country": country,
+                "country_code": country_code,
                 "location": location,
                 "latitude": latitude,
                 "longitude": longitude,
