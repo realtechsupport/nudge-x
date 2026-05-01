@@ -90,6 +90,10 @@ Vectorize accepted captions to Qdrant:
 
 	python3 -m mllm.main.vectorization_pipeline
 
+Note: each run processes at most 500 captions. Re-run the command until
+it prints "No accepted captions found for embedding." Otherwise only
+the first 500 get embedded and the rest stay invisible to RAG.
+
 RAG (captions only):
 
 	python3 -m rag.rag_pipeline
@@ -106,6 +110,10 @@ Ingest documents:
 Reset caption embeddings (then re-run vectorization):
 
 	python3 -m database_pipeline.delete_captions
+
+After resetting, every caption is pending again. Re-run vectorization
+in a loop (same 500-per-run cap applies) until it reports
+"No accepted captions found for embedding."
 
 -----------------------------------------------------------------------------
 5) Export captions
