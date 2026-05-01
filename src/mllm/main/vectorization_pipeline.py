@@ -12,6 +12,7 @@ from database_pipeline.database_operations import (
     fetch_captions_without_embeddings,
     mark_embeddings_added,
     fetch_stale_embedding_caption_ids,
+    delete_caption_embedding_rows,
 )
 from database_pipeline.vector_db_operations import (
     create_qdrant_client,
@@ -54,17 +55,26 @@ def main():
         qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
         client = create_qdrant_client(host=qdrant_host, port=qdrant_port)
 
-    # Remove stale embeddings for images that have newer accepted captions
-    stale_ids = fetch_stale_embedding_caption_ids(limit=100)
+    # Remove stale embeddings for images that have newer accepted captions.
+    # Two-step cleanup: (1) delete the points from Qdrant, (2) delete the
+    # caption_embeddings row in Postgres. Skipping step 2 means the same
+    # caption_ids keep getting reported as stale on every subsequent run
+    # because their `embedding_added = TRUE` flag is never cleared.
+    stale_ids = fetch_stale_embedding_caption_ids(limit=500)
     if stale_ids:
         print(f"Found {len(stale_ids)} stale caption embedding(s). Deleting from Qdrant...")
         for caption_id in stale_ids:
             delete_points_by_caption_id(client, collection_name, caption_id)
+        deleted_rows = delete_caption_embedding_rows(stale_ids)
+        print(
+            f"Cleared {deleted_rows} caption_embeddings row(s) so they "
+            f"won't be re-detected as stale on the next run."
+        )
     else:
         print("No stale caption embeddings found.")
 
     # Fetch accepted captions that do not yet have embeddings
-    pending = fetch_captions_without_embeddings(limit=100)
+    pending = fetch_captions_without_embeddings(limit=500)
     if not pending:
         print("No accepted captions found for embedding.")
         return
@@ -130,9 +140,24 @@ def main():
 
     mark_embeddings_added(original_caption_ids)
 
-    #print(f"Embeddings created and stored for {len(point_ids)} chunks.")
-    print("All captions have been converted into embeddings.")
-    print("You can now run the RAG pipeline.")
+    embedded_count = len(original_caption_ids)
+    print(
+        f"Embedded {embedded_count} caption(s) in this run "
+        f"({len(point_ids)} chunks)."
+    )
+
+    # Probe whether more captions remain pending so the user knows whether
+    # to re-run. We deliberately use a small limit because we only need a
+    # boolean (any pending?) — not the full list.
+    remaining_probe = fetch_captions_without_embeddings(limit=1)
+    if remaining_probe:
+        print(
+            "More captions are still pending. Re-run "
+            "`python3 -m mllm.main.vectorization_pipeline` until you see "
+            "\"No accepted captions found for embedding.\""
+        )
+    else:
+        print("Queue empty. You can now run the RAG pipeline.")
 
 
 if __name__ == "__main__":
