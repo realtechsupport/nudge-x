@@ -2,8 +2,14 @@ from typing import List, Dict, Tuple
 from qdrant_client import QdrantClient, models
 from sentence_transformers import SentenceTransformer
 import uuid
+import time
 import numpy as np
 import os
+
+# HTTP timeout (seconds) for Qdrant client requests. Generous because
+# `wait=True` upserts block until server-side indexing completes, which can
+# exceed the qdrant-client default (~60s) on busy clusters or slow networks.
+QDRANT_HTTP_TIMEOUT = int(os.getenv("QDRANT_HTTP_TIMEOUT", "300"))
 
 # -------------------------------
 # QDRANT CLIENT INITIALIZATION
@@ -13,7 +19,7 @@ def create_qdrant_client(host: str = "localhost", port: int = 6333) -> QdrantCli
     """
     Create a Qdrant client connected to an external service.
     """
-    client = QdrantClient(host=host, port=port)
+    client = QdrantClient(host=host, port=port, timeout=QDRANT_HTTP_TIMEOUT)
     try:
         client.get_collections()  # test connection
         print(f"Connected to external Qdrant at {host}:{port}.")
@@ -52,7 +58,7 @@ def create_qdrant_client_api(
     if not api_key:
         raise ValueError("Qdrant API key is required.")
 
-    client = QdrantClient(url=url, api_key=api_key, prefer_grpc=prefer_grpc)
+    client = QdrantClient(url=url, api_key=api_key, prefer_grpc=prefer_grpc, timeout=QDRANT_HTTP_TIMEOUT)
     try:
         client.get_collections()
         print(f"Connected to Qdrant API at {url} (gRPC={prefer_grpc}).")
@@ -165,18 +171,50 @@ def add_captions_to_vector_db(
             )
         )
         added_point_ids.append(point_id)
-    
-    # Upsert into Qdrant
-    client.upsert(
-        collection_name=collection_name,
-        points=models.Batch(
-            ids=[p.id for p in points_to_upsert],
-            vectors=[p.vector for p in points_to_upsert],
-            payloads=[p.payload for p in points_to_upsert]
-        ),
-        wait=True
-    )
-    
+
+    # Upsert into Qdrant in sub-batches with retries.
+    # A single 1000-point upsert with `wait=True` can blow the HTTP timeout on a
+    # slow network or a busy cluster — and losing it costs the entire embedding
+    # run. Splitting into smaller upserts bounds the blast radius of any one
+    # failure and lets us retry without redoing the embedding step.
+    upsert_batch_size = int(os.getenv("QDRANT_UPSERT_BATCH_SIZE", "100"))
+    max_retries = int(os.getenv("QDRANT_UPSERT_RETRIES", "3"))
+    total = len(points_to_upsert)
+
+    for start in range(0, total, upsert_batch_size):
+        batch = points_to_upsert[start:start + upsert_batch_size]
+        attempt = 0
+        while True:
+            try:
+                client.upsert(
+                    collection_name=collection_name,
+                    points=models.Batch(
+                        ids=[p.id for p in batch],
+                        vectors=[p.vector for p in batch],
+                        payloads=[p.payload for p in batch],
+                    ),
+                    wait=True,
+                )
+                print(f"  upserted {start + len(batch)}/{total}", flush=True)
+                break
+            except Exception as e:
+                attempt += 1
+                if attempt > max_retries:
+                    print(
+                        f"  giving up on upsert batch {start}-{start + len(batch)} "
+                        f"after {max_retries} retries: {e}",
+                        flush=True,
+                    )
+                    raise
+                backoff = 2 ** attempt
+                print(
+                    f"  upsert batch {start}-{start + len(batch)} failed "
+                    f"(attempt {attempt}/{max_retries}): {e!r}. "
+                    f"Retrying in {backoff}s...",
+                    flush=True,
+                )
+                time.sleep(backoff)
+
     print(f"Added {len(points_to_upsert)} chunks to '{collection_name}'.")
     return added_point_ids
 
