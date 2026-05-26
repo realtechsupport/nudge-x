@@ -31,6 +31,7 @@ Add your venv name to .gitignore. Copy .env.example to .env and fill values.
 2) Environment variables (.env in yourpath/nudge-x/.env)
 -----------------------------------------------------------------------------
 Upload your metadata file to: yourpath/nudge-x/data/metadata/yourmetadatafile.tsv
+Upload your prompt file to:   yourpath/nudge-x/src/mllm/prompts/
 
 Required settings (see .env.example for full list):
 
@@ -40,14 +41,12 @@ Required settings (see .env.example for full list):
 	POSTGRES_HOST=localhost
 	POSTGRES_PORT=5432
 	IMAGE_DIR=                    # local path or gs://bucket/prefix
-	METADATA_TSV=                 # e.g. data/metadata/Mines_Metadata_v28.tsv
-	PROMPT_VERSION=v7             # must match a prompts_v*.py file
 	NVIDIA_API_KEY=
 	GOOGLE_API_KEY=
 	DEEPSEEK_API_KEY=
 
 	METADATA_TSV = yourpath/nudge-x/data/metadata/yourmetadatafile.tsv
-	PROMPT_VERSION = v7
+	PROMPT_VERSION = v7         # must match a prompts_v*.py file
 
 Qdrant (local): QDRANT_HOST, QDRANT_PORT, QDRANT_MODE=production
 Qdrant (cloud): QDRANT_MODE=api, QDRANT_URL, QDRANT_API_KEY
