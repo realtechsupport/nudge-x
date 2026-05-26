@@ -47,6 +47,7 @@ Required settings (see .env.example for full list):
 	DEEPSEEK_API_KEY=
 
 	METADATA_TSV = yourpath/nudge-x/data/metadata/yourmetadatafile.tsv
+	PROMPT_VERSION = v7
 
 Qdrant (local): QDRANT_HOST, QDRANT_PORT, QDRANT_MODE=production
 Qdrant (cloud): QDRANT_MODE=api, QDRANT_URL, QDRANT_API_KEY
