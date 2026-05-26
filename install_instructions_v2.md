@@ -28,10 +28,11 @@ Install Python deps:
 Add your venv name to .gitignore. Copy .env.example to .env and fill values.
 
 -----------------------------------------------------------------------------
-2) Environment variables (.env)
+2) Environment variables (.env in yourpath/nudge-x/.env)
 -----------------------------------------------------------------------------
+Upload your metadata file to: yourpath/nudge-x/data/metadata/yourmetadatafile.tsv
 
-Required (see .env.example for full list):
+Required settings (see .env.example for full list):
 
 	POSTGRES_DB=captions_db
 	POSTGRES_USER=db_user
@@ -44,6 +45,8 @@ Required (see .env.example for full list):
 	NVIDIA_API_KEY=
 	GOOGLE_API_KEY=
 	DEEPSEEK_API_KEY=
+
+	METADATA_TSV = yourpath/nudge-x/data/metadata/yourmetadatafile.tsv
 
 Qdrant (local): QDRANT_HOST, QDRANT_PORT, QDRANT_MODE=production
 Qdrant (cloud): QDRANT_MODE=api, QDRANT_URL, QDRANT_API_KEY
