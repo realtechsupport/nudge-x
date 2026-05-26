@@ -314,9 +314,9 @@ If you still see an old page, do a **hard refresh** (e.g. `Ctrl+Shift+R` / `Cmd+
 
 ## 7. Redeploying after code changes or dataset updates
 
-When you update the captions file, place a copy to: ~/globe/public/
+When you update the captions file, place a copy to: '~/globe/public/'
 
-Update the file siteData.js: export const TSV_URL = newcaptions.tsv
+Update the file siteData.js: 'export const TSV_URL' = newcaptions.tsv
 
 When you change code in `/home/USERNAME/globe`, redeploy like this:
 
