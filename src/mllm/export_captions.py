@@ -132,15 +132,15 @@ def write_tsv(rows: Iterable[Tuple], output_path: str) -> int:
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f, delimiter="\t")
         writer.writerow(
-            ["filename", "mine_name", "location", "country", "GPS_coordinates", "caption"]
+            ["filename", "mine_name", "site_location", "country", "gps_coordinates", "caption"]
         )
         count = 0
-        for filename, mine_name, location, country, latitude, longitude, caption in rows:
+        for filename, mine_name, site_location, country, latitude, longitude, caption in rows:
             writer.writerow(
                 [
                     filename,
                     mine_name or "",
-                    location or "",
+                    site_location or "",
                     country or "",
                     format_gps(latitude, longitude),
                     caption or "",
