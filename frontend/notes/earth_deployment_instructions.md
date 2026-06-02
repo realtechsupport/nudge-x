@@ -328,7 +328,7 @@ npm run build
 
 # Copy updated build to Nginx web root
 sudo rm -rf /var/www/globe/*
-sudo cp -r dist/* /var/www/globe/
+sudo cp -a /home/marcbohlen/globe/dist/. /var/www/globe/
 sudo chown -R www-data:www-data /var/www/globe
 
 # Only needed if Nginx config changed:
