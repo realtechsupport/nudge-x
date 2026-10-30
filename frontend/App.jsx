@@ -113,7 +113,7 @@ function Globe({ autoSiteIndex, setAutoSiteIndex }) {
 
     const loader = new THREE.TextureLoader();
     loader.load(
-      "/BlankMap-World-Equirectangular_v3.png",
+      `${import.meta.env.BASE_URL}BlankMap-World-Equirectangular_v3.png`,
       (texture) => {
         solidGlobe.material.map = texture;
         solidGlobe.material.needsUpdate = true;
@@ -123,7 +123,7 @@ function Globe({ autoSiteIndex, setAutoSiteIndex }) {
       },
       undefined,
       (err) => {
-        console.warn("Failed to load earth-continents-black.png:", err);
+        console.warn("Failed to load globe texture:", err);
         // If the texture fails, still show the globe and overlays
         scene.add(solidGlobe);
         if (wire) scene.add(wire);
@@ -366,7 +366,7 @@ export default function App() {
 
   return (
     <div className="w-full min-h-screen bg-black text-white">
-      <Router>
+      <Router basename={import.meta.env.BASE_URL}>
         <Routes>
           <Route
             path="/"
