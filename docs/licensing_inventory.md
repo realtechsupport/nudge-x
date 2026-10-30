@@ -14,26 +14,41 @@ sources are documented in [source attribution](source_attribution.md) and the
 | Satellite images in `data/images/` and `sample_images/` | Maintainer confirms Copernicus Sentinel-2; paper Section 2; attribution and legal-notice link added | Preserve acquisition-year credit; add exact product identifiers where available |
 | `data/metadata/Mines_Metadata_v35.tsv` | Paper Section 3.2 describes human-compiled metadata; per-row `sources` column cites multiple websites | Distinguish original summaries from copied/adapted material and retain applicable source terms |
 | Exported caption TSVs | Project-generated model outputs and metadata | Document generation/provenance and relevant source/provider terms; do not assume a code license covers all content |
-| `data/Scambary_MyCountryMyMine_2013_239p.pdf` | Third-party publication | Confirm edition, source URL, license and redistribution permission; otherwise replace the bundled copy with retrieval instructions |
-| `frontend/public/BlankMap-World-Equirectangular_v3.png` | Map asset, no source/license recorded | Record original source, changes, creator and license |
-| `frontend/public/globe_back.png` and `Rotating-Earth.png` | Image assets, no source/license recorded | Confirm authorship and applicable license/attribution |
+| `data/Scambary_MyCountryMyMine_2013_239p.pdf` | Third-party publication by Benedict Scambary; publisher and DOI identified below | Confirm the bundled edition's redistribution terms; otherwise replace the bundled copy with retrieval instructions |
+| `frontend/public/BlankMap-World-Equirectangular_v3.png` | Maintainer confirms the Wikimedia Commons source identified below; source map released under CC0 1.0 | Record any project-specific modifications; source permits modification and redistribution |
+| `frontend/public/globe_back.png` | Original homemade icon by Marc Böhlen | State the intended reuse license for this image |
+| `Rotating-Earth.png` | Screenshot from a video, as confirmed by the maintainer | Confirm video ownership and intended reuse license |
 | Images served from Google Cloud Storage | `frontend/app_gcp_assets.js` identifies the public bucket | Inventory source and rights separately from hosting location |
 
 Do not apply a new project license to third-party material without checking its
 existing terms. Preserve license notices for dependencies and upstream material.
 
-## Source leads to verify
+## Confirmed map source
 
-- Scambary's book is listed by [ANU Press](https://press.anu.edu.au/publications/series/caepr/my-country-mine-country),
-  DOI `10.22459/CAEPR33.05.2013`. ANU Press's
-  [FAQ](https://press.anu.edu.au/faqs) asks readers to check each book's copyright
-  page and encourages linking rather than offsite hosting. The bundled edition
-  still needs to be checked; availability as a free download is not itself a
-  redistribution license.
-- Wikimedia Commons has a similarly named
-  [BlankMap-World-Equirectangular.svg](https://commons.wikimedia.org/wiki/File:BlankMap-World-Equirectangular.svg).
-  A matching filename is not proof that it is the source of the PNG here.
-  Confirm the source and changes before using its attribution or license.
+The maintainer identifies
+[BlankMap-World-Equirectangular.svg on Wikimedia Commons](https://commons.wikimedia.org/wiki/File:BlankMap-World-Equirectangular.svg)
+as the source of `frontend/public/BlankMap-World-Equirectangular_v3.png`.
+
+The Commons page credits John Harvey and upstream contributors, with derivation
+from maps based on the CIA World Factbook. It identifies the source map as
+available under the
+[CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+
+The source permits copying, modification and redistribution, including commercial
+use, without seeking permission. This source credit is retained for provenance.
+The project's PNG version should not be described as an unmodified original SVG.
+
+## Bundled publication
+
+Scambary's *My Country, Mine Country: Indigenous People, Mining and Development
+Contestation in Remote Australia* is listed by
+[ANU Press](https://press.anu.edu.au/publications/series/caepr/my-country-mine-country),
+DOI `10.22459/CAEPR33.05.2013`.
+
+ANU Press's [FAQ](https://press.anu.edu.au/faqs) asks readers to check each book's
+copyright page and encourages linking rather than offsite hosting. The bundled
+edition still needs to be checked; availability as a free download is not itself
+a redistribution license.
 
 ## Development provenance
 
