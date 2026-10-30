@@ -18,7 +18,7 @@ sources are documented in [source attribution](source_attribution.md) and the
 | `frontend/public/BlankMap-World-Equirectangular_v3.png` | Maintainer confirms the Wikimedia Commons source identified below; source map released under CC0 1.0 | Record any project-specific modifications; source permits modification and redistribution |
 | `frontend/public/globe_back.png` | Original homemade icon by Marc Böhlen | State the intended reuse license for this image |
 | `Rotating-Earth.png` | Screenshot from a video, as confirmed by the maintainer | Confirm video ownership and intended reuse license |
-| Images served from Google Cloud Storage | `frontend/app_gcp_assets.js` identifies the public bucket | Inventory source and rights separately from hosting location |
+| Images served from Google Cloud Storage | Publicly accessible Copernicus Sentinel-2 images processed by Marc Böhlen; provenance confirmed by the maintainer | Preserve Copernicus attribution, including the acquisition year, under the same terms as the repository's Sentinel-2 imagery |
 
 Do not apply a new project license to third-party material without checking its
 existing terms. Preserve license notices for dependencies and upstream material.
