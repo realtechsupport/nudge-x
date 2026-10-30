@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { getAssetUrl } from "./app_gcp_assets";
 
 // Path (from the web root) to the TSV file. Place the TSV in your Vite `public/` folder.
-export const TSV_URL = "/frontend_captions_2026-01-08_val.tsv";
+export const TSV_URL = `${import.meta.env.BASE_URL}captions_promptv9_metadataV35_a01530d4_2026-06-02_clean.tsv`;
 
 /* ----------------- Utility: severity color ----------------- */
 export const getColorForSeverity = (severity) => {

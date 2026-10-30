@@ -1,6 +1,7 @@
 // SiteDisplay.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { fetchSitesFromTsv } from "./siteData.js";
 import "./SiteDisplay.css";
 
 function formatLabel(label) {
@@ -88,27 +89,46 @@ function TypewriterText({ text, speed = 50, onDone }) {
 
 export default function SiteDisplay() {
   const { state } = useLocation();
-  const navigate = useNavigate();
+  const { name } = useParams();
+  const [site, setSite] = useState(state || null);
+  const [loading, setLoading] = useState(!state);
+  const [error, setError] = useState(null);
 
-  // Fallback: direct URL / bad navigation
-  if (!state) {
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    setSite(state || null);
+    setLoading(!state);
+    if (!state) {
+      fetchSitesFromTsv()
+        .then((sites) => {
+          if (!cancelled) setSite(sites.find((entry) => entry.name === name) || null);
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err.message || String(err));
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }
+    return () => { cancelled = true; };
+  }, [name, state]);
+
+  if (loading) return <div className="site-container">Loading site...</div>;
+  if (!site) {
     return (
       <div className="site-container">
-        <div className="site-message">
-          <h2>Invalid site</h2>
-          <a href="/">
-            <img
-              src="/globe_back.png"
-              alt="Back to Globe"
-              className="globe-back-icon"
-            />
-          </a>
-        </div>
+        <h2>{error ? "Unable to load site" : "Site not found"}</h2>
+        {error && <p>{error}</p>}
+        <Link to="/">Back to Globe</Link>
       </div>
     );
   }
+  return <SiteContent key={name} site={site} />;
+}
 
-  const site = state;
+function SiteContent({ site }) {
+  const navigate = useNavigate();
 
   const captionBody =
     Array.isArray(site.captions) && typeof site.captions[0] === "string"
@@ -171,13 +191,13 @@ export default function SiteDisplay() {
       </div>
 
       {showBackIcon && (
-        <a href="/" className="site-link">
+        <Link to="/" className="site-link">
           <img
-            src="/globe_back.png"
+            src={`${import.meta.env.BASE_URL}globe_back.png`}
             alt="Back to Globe"
             className="globe-back-icon"
           />
-        </a>
+        </Link>
       )}
     </div>
   );
